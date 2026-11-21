@@ -18,6 +18,7 @@ namespace sdlagent::ui
 class ChatView;
 class InputBox;
 class Panel;
+class ArrowButton;
 
 //Right-hand pane: chat history + input box, split by a draggable divider.
 class ChatPanel : public sdlgui::SplitView
@@ -78,7 +79,7 @@ private:
     sdlgui::Label*       hint_ = nullptr;
     sdlgui::Button*      send_ = nullptr;
     sdlgui::Button*      stop_ = nullptr;
-    sdlgui::Button*      attachButton_ = nullptr;
+    ArrowButton*         attachButton_ = nullptr;
     sdlgui::Widget*      attachRow_ = nullptr;
     Session*             session_ = nullptr;
     std::filesystem::path sessionsRoot_;

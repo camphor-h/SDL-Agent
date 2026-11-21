@@ -211,9 +211,14 @@ ArrowButton::ArrowButton(sg::Widget* parent)
 
 void ArrowButton::setDirection(bool left)
 {
-    if (left_ == left)
+    setDirection(left ? Direction::Left : Direction::Right);
+}
+
+void ArrowButton::setDirection(Direction direction)
+{
+    if (direction_ == direction)
         return;
-    left_ = left;
+    direction_ = direction;
     markDirty();
 }
 
@@ -252,15 +257,31 @@ void ArrowButton::onRender(SDL_Renderer* renderer)
     if (s < 3.0f)
         s = 3.0f;
 
-    float tipX = left_ ? cx - s : cx + s;
-    float armX = left_ ? cx + s : cx - s;
-
     SDL_SetRenderDrawColor(renderer, arrow_.r, arrow_.g, arrow_.b, arrow_.a);
-    for (int offset = -1; offset <= 1; ++offset)
+
+    if (direction_ == Direction::Left || direction_ == Direction::Right)
     {
-        float oy = (float)offset;
-        SDL_RenderLine(renderer, armX, cy - s + oy, tipX, cy + oy);
-        SDL_RenderLine(renderer, tipX, cy + oy, armX, cy + s + oy);
+        bool left = direction_ == Direction::Left;
+        float tipX = left ? cx - s : cx + s;
+        float armX = left ? cx + s : cx - s;
+        for (int offset = -1; offset <= 1; ++offset)
+        {
+            float oy = (float)offset;
+            SDL_RenderLine(renderer, armX, cy - s + oy, tipX, cy + oy);
+            SDL_RenderLine(renderer, tipX, cy + oy, armX, cy + s + oy);
+        }
+    }
+    else
+    {
+        bool up = direction_ == Direction::Up;
+        float tipY = up ? cy - s : cy + s;
+        float armY = up ? cy + s : cy - s;
+        for (int offset = -1; offset <= 1; ++offset)
+        {
+            float ox = (float)offset;
+            SDL_RenderLine(renderer, cx - s + ox, armY, cx + ox, tipY);
+            SDL_RenderLine(renderer, cx + ox, tipY, cx + s + ox, armY);
+        }
     }
 
     dirty_ = false;

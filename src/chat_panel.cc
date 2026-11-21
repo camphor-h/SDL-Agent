@@ -251,15 +251,15 @@ ChatPanel::ChatPanel(sg::Widget* parent)
         }
     };
 
-    attachButton_ = inputPanel_->addChild<sg::Button>();
-    attachButton_->pos(0, 0)->sz(84, 28);
-    attachButton_->setAnchors(sg::AnchorLeft | sg::AnchorBottom, 12, 0, 0, 9);
-    attachButton_->setText(tr().attach);
+    attachButton_ = inputPanel_->addChild<ArrowButton>();
+    attachButton_->pos(0, 0)->sz(32, 28);
+    attachButton_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 102, 9);
+    attachButton_->setDirection(ArrowButton::Direction::Up);
     attachButton_->onClick = [this](sg::MouseEvent&) { openFileDialog(); };
 
     hint_ = inputPanel_->addChild<sg::Label>();
-    hint_->pos(104, 18)->sz(300, 18);
-    hint_->setAnchors(sg::AnchorLeft | sg::AnchorBottom, 104, 0, 0, 14);
+    hint_->pos(14, 18)->sz(420, 18);
+    hint_->setAnchors(sg::AnchorLeft | sg::AnchorBottom, 14, 0, 0, 14);
     hint_->setText("");
     hint_->setTextColor(sg::Color(150, 153, 160));
 
@@ -756,6 +756,12 @@ void ChatPanel::applyTheme(const sg::Theme& theme)
 
     if (inputPanel_)
         inputPanel_->setColors(theme.panelBg, theme.divider, 1);
+    if (attachButton_)
+    {
+        attachButton_->setColors(theme.buttonBg, theme.buttonHover,
+                                 theme.buttonPressed, theme.buttonText,
+                                 theme.border);
+    }
     if (hint_)
         hint_->setTextColor(theme.mutedText);
     if (input_)

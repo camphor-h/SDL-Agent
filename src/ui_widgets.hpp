@@ -68,7 +68,6 @@ public:
     int  contentHeight() const { return contentH_; }
 };
 
-//Small self-drawn arrow button (no font glyphs involved).
 //Simple horizontal progress bar (0..1).
 class ProgressBar : public sdlgui::Widget
 {
@@ -89,13 +88,18 @@ private:
     sdlgui::Color border_{ 80, 82, 90, 255 };
 };
 
+//Small self-drawn arrow button (no font glyphs involved).
 class ArrowButton : public sdlgui::Widget
 {
 public:
+    enum class Direction { Left, Right, Up, Down };
+
     explicit ArrowButton(sdlgui::Widget* parent = nullptr);
 
     void setDirection(bool left);
-    bool left() const { return left_; }
+    void setDirection(Direction direction);
+    Direction direction() const { return direction_; }
+    bool left() const { return direction_ == Direction::Left; }
 
     void setColors(sdlgui::Color bg, sdlgui::Color hover,
                    sdlgui::Color pressed, sdlgui::Color arrow,
@@ -104,7 +108,7 @@ public:
     void onRender(SDL_Renderer* renderer) override;
 
 private:
-    bool  left_ = true;
+    Direction direction_ = Direction::Left;
     bool  hover_ = false;
     bool  pressed_ = false;
     sdlgui::Color bg_{ 30, 31, 35, 255 };
