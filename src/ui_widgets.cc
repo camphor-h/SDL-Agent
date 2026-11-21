@@ -1,0 +1,463 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+#include "ui_widgets.hpp"
+
+#include <algorithm>
+
+namespace sdlagent::ui
+{
+namespace sg = sdlgui;
+
+void Panel::setColors(sg::Color bg, sg::Color border, int borderWidth)
+{
+    bg_ = bg;
+    border_ = border;
+    borderWidth_ = borderWidth;
+    markDirty();
+}
+
+void Panel::setBackground(sg::Color bg)
+{
+    bg_ = bg;
+    markDirty();
+}
+
+void Panel::onRender(SDL_Renderer* renderer)
+{
+    if (!visible())
+        return;
+
+    sg::Rect r = absoluteRect();
+    fillRect(renderer, r, bg_);
+
+    if (borderWidth_ > 0 && border_.a > 0)
+    {
+        SDL_SetRenderDrawColor(renderer, border_.r, border_.g, border_.b, border_.a);
+        for (int i = 0; i < borderWidth_; ++i)
+        {
+            SDL_FRect fr = { (float)(r.x + i), (float)(r.y + i),
+                             (float)(r.w - i * 2), (float)(r.h - i * 2) };
+            SDL_RenderRect(renderer, &fr);
+        }
+    }
+
+    sg::Widget::onRender(renderer);
+}
+
+void VLine::onRender(SDL_Renderer* renderer)
+{
+    if (!visible())
+        return;
+    fillRect(renderer, absoluteRect(), color_);
+    dirty_ = false;
+}
+
+sg::Font* BoldFont::base() const
+{
+    sg::Font* f = sg::currentFont();
+    return (f == this) ? nullptr : f;
+}
+
+int BoldFont::lineHeight() const
+{
+    sg::Font* f = base();
+    return f ? f->lineHeight() : 16;
+}
+
+int BoldFont::ascent() const
+{
+    sg::Font* f = base();
+    return f ? f->ascent() : 16;
+}
+
+int BoldFont::measure(const char* text) const
+{
+    sg::Font* f = base();
+    return f ? f->measure(text) : 0;
+}
+
+int BoldFont::measureTo(const char* text, int bytePos) const
+{
+    sg::Font* f = base();
+    return f ? f->measureTo(text, bytePos) : 0;
+}
+
+int BoldFont::advance(uint32_t codepoint) const
+{
+    sg::Font* f = base();
+    return f ? f->advance(codepoint) : 8;
+}
+
+void BoldFont::draw(SDL_Renderer* renderer, const char* text, int x, int y,
+                    sg::Color color)
+{
+    sg::Font* f = base();
+    if (!f)
+        return;
+    f->draw(renderer, text, x, y, color);
+    f->draw(renderer, text, x + 1, y, color);
+}
+
+std::shared_ptr<sg::Font> boldFont()
+{
+    static std::shared_ptr<sg::Font> font = std::make_shared<BoldFont>();
+    return font;
+}
+
+ChatView::ChatView(sg::Widget* parent)
+    : sg::RichTextView(parent)
+{
+    setPadding(16);
+    setLineSpacing(3);
+    scrollbarV(true);
+    scrollbarH(false);
+    setSelectable(true);
+
+    //Right-click opens a context menu; it must not clear the current
+    //selection the way a left-button drag does.
+    auto baseDown = onMouseDown;
+    onMouseDown = [baseDown](sg::MouseEvent& e)
+    {
+        if (e.button == SDL_BUTTON_RIGHT)
+            return;
+        if (baseDown)
+            baseDown(e);
+    };
+}
+
+bool ChatView::nearBottom(int slack) const
+{
+    int maxY = std::max(0, contentH_ - height_);
+    return (maxY - scrollY_) <= slack;
+}
+
+void ChatView::scrollToBottom()
+{
+    setScrollOffset(0, std::max(0, contentH_ - height_));
+}
+
+ProgressBar::ProgressBar(sg::Widget* parent)
+    : sg::Widget(parent)
+{
+}
+
+void ProgressBar::setValue(float value)
+{
+    value = std::max(0.0f, std::min(1.0f, value));
+    if (value_ == value)
+        return;
+    value_ = value;
+    markDirty();
+}
+
+void ProgressBar::setColors(sg::Color background, sg::Color fill,
+                            sg::Color border)
+{
+    bg_ = background;
+    fill_ = fill;
+    border_ = border;
+    markDirty();
+}
+
+void ProgressBar::onRender(SDL_Renderer* renderer)
+{
+    if (!visible())
+        return;
+
+    sg::Rect r = absoluteRect();
+    fillRect(renderer, r, bg_);
+
+    int fillW = (int)((r.w - 2) * value_);
+    if (fillW > 0)
+    {
+        sg::Rect f{ r.x + 1, r.y + 1, fillW, r.h - 2 };
+        fillRect(renderer, f, fill_);
+    }
+
+    if (border_.a != 0)
+    {
+        SDL_SetRenderDrawColor(renderer, border_.r, border_.g, border_.b,
+                               border_.a);
+        SDL_FRect fr = { (float)r.x, (float)r.y, (float)r.w, (float)r.h };
+        SDL_RenderRect(renderer, &fr);
+    }
+}
+
+ArrowButton::ArrowButton(sg::Widget* parent)
+    : sg::Widget(parent)
+{
+    onMouseEnter = [this](sg::MouseEvent&)
+    {
+        hover_ = true;
+        markDirty();
+    };
+    onMouseLeave = [this](sg::MouseEvent&)
+    {
+        hover_ = false;
+        pressed_ = false;
+        markDirty();
+    };
+    onMouseDown = [this](sg::MouseEvent&)
+    {
+        pressed_ = true;
+        markDirty();
+    };
+    onMouseUp = [this](sg::MouseEvent&)
+    {
+        pressed_ = false;
+        markDirty();
+    };
+}
+
+void ArrowButton::setDirection(bool left)
+{
+    if (left_ == left)
+        return;
+    left_ = left;
+    markDirty();
+}
+
+void ArrowButton::setColors(sg::Color bg, sg::Color hover, sg::Color pressed,
+                            sg::Color arrow, sg::Color border)
+{
+    bg_ = bg;
+    hoverBg_ = hover;
+    pressedBg_ = pressed;
+    arrow_ = arrow;
+    border_ = border;
+    markDirty();
+}
+
+void ArrowButton::onRender(SDL_Renderer* renderer)
+{
+    if (!visible())
+        return;
+
+    sg::Rect r = absoluteRect();
+    sg::Color bg = pressed_ ? pressedBg_ : (hover_ ? hoverBg_ : bg_);
+
+    fillRect(renderer, r, bg);
+
+    if (border_.a != 0)
+    {
+        SDL_SetRenderDrawColor(renderer, border_.r, border_.g, border_.b,
+                               border_.a);
+        SDL_FRect fr = { (float)r.x, (float)r.y, (float)r.w, (float)r.h };
+        SDL_RenderRect(renderer, &fr);
+    }
+
+    float cx = (float)r.x + r.w * 0.5f;
+    float cy = (float)r.y + r.h * 0.5f;
+    float s = std::min(r.w, r.h) * 0.22f;
+    if (s < 3.0f)
+        s = 3.0f;
+
+    float tipX = left_ ? cx - s : cx + s;
+    float armX = left_ ? cx + s : cx - s;
+
+    SDL_SetRenderDrawColor(renderer, arrow_.r, arrow_.g, arrow_.b, arrow_.a);
+    for (int offset = -1; offset <= 1; ++offset)
+    {
+        float oy = (float)offset;
+        SDL_RenderLine(renderer, armX, cy - s + oy, tipX, cy + oy);
+        SDL_RenderLine(renderer, tipX, cy + oy, armX, cy + s + oy);
+    }
+
+    dirty_ = false;
+}
+
+Modal::Modal(sg::Widget* parent)
+    : sg::Widget(parent)
+{
+}
+
+void Modal::setResponsivePanel(bool on, int marginX, int marginY, int minW,
+                               int minH, int maxW, int maxH)
+{
+    responsive_ = on;
+    marginX_ = marginX;
+    marginY_ = marginY;
+    minW_ = minW;
+    minH_ = minH;
+    maxW_ = maxW;
+    maxH_ = maxH;
+    relayout();
+}
+
+void Modal::showModal()
+{
+    setVisible(true);
+    relayout();
+    markDirty();
+    if (getWindow())
+        getWindow()->requestRedraw();
+}
+
+void Modal::hideModal()
+{
+    setVisible(false);
+    markDirty();
+    if (getWindow())
+        getWindow()->requestRedraw();
+}
+
+void Modal::layoutChildren()
+{
+    if (panel_)
+    {
+        if (responsive_)
+        {
+            int pw = std::min(maxW_, std::max(minW_, width_ - marginX_ * 2));
+            int ph = std::min(maxH_, std::max(minH_, height_ - marginY_ * 2));
+            if (panel_->width() != pw || panel_->height() != ph)
+            {
+                panel_->setSize(pw, ph);
+                if (onPanelSize)
+                    onPanelSize(pw, ph);
+            }
+        }
+
+        int pw = panel_->width();
+        int ph = panel_->height();
+        int x = std::max(0, (width_ - pw) / 2);
+        int y = std::max(0, (height_ - ph) / 2);
+        panel_->setPosition(x, y);
+    }
+    sg::Widget::layoutChildren();
+}
+
+void Modal::onRender(SDL_Renderer* renderer)
+{
+    if (!visible())
+        return;
+
+    fillRect(renderer, absoluteRect(), overlay_);
+    sg::Widget::onRender(renderer);
+}
+
+int textWidth(const std::string& text)
+{
+    sdlgui::Font* font = sdlgui::currentFont();
+    return font ? font->measure(text.c_str()) : 0;
+}
+
+namespace
+{
+
+uint32_t decodeUtf8(const char*& p)
+{
+    const unsigned char* s = reinterpret_cast<const unsigned char*>(p);
+    uint32_t cp = 0;
+    int len = 1;
+
+    if (s[0] < 0x80)
+    {
+        cp = s[0];
+        len = 1;
+    }
+    else if ((s[0] & 0xE0) == 0xC0)
+    {
+        cp = s[0] & 0x1F;
+        len = 2;
+    }
+    else if ((s[0] & 0xF0) == 0xE0)
+    {
+        cp = s[0] & 0x0F;
+        len = 3;
+    }
+    else if ((s[0] & 0xF8) == 0xF0)
+    {
+        cp = s[0] & 0x07;
+        len = 4;
+    }
+    else
+    {
+        p += 1;
+        return 0xFFFD;
+    }
+
+    for (int i = 1; i < len; ++i)
+    {
+        if ((s[i] & 0xC0) != 0x80)
+        {
+            p += 1;
+            return 0xFFFD;
+        }
+        cp = (cp << 6) | (s[i] & 0x3F);
+    }
+
+    p += len;
+    return cp;
+}
+
+} //namespace
+
+std::string ellipsize(const std::string& text, int maxWidth)
+{
+    if (maxWidth <= 0)
+        return {};
+    sdlgui::Font* font = sdlgui::currentFont();
+    if (!font || font->measure(text.c_str()) <= maxWidth)
+        return text;
+
+    const std::string dots = "…";
+    int dotsW = font->measure(dots.c_str());
+    if (dotsW >= maxWidth)
+        return {};
+
+    std::string out;
+    const char* p = text.c_str();
+    int w = 0;
+    while (*p)
+    {
+        const char* prev = p;
+        uint32_t cp = decodeUtf8(p);
+        int adv = font->advance(cp);
+        if (w + adv + dotsW > maxWidth)
+            break;
+        out.append(prev, (std::size_t)(p - prev));
+        w += adv;
+    }
+    out += dots;
+    return out;
+}
+
+void drawClipped(SDL_Renderer* renderer, const std::string& text, int x, int y,
+                 int maxWidth, sg::Color color)
+{
+    if (!renderer || text.empty() || maxWidth <= 0)
+        return;
+
+    sdlgui::Font* font = sdlgui::currentFont();
+    if (!font)
+        return;
+
+    SDL_Rect want{ x, y, maxWidth, font->lineHeight() + 2 };
+    SDL_Rect prev{};
+    bool hadClip = SDL_GetRenderClipRect(renderer, &prev) &&
+                   SDL_RenderClipEnabled(renderer);
+
+    if (hadClip)
+    {
+        SDL_Rect isect;
+        SDL_GetRectIntersection(&want, &prev, &isect);
+        want = isect;
+        if (want.w <= 0 || want.h <= 0)
+            return;
+    }
+
+    SDL_SetRenderClipRect(renderer, &want);
+    font->draw(renderer, text.c_str(), x, y, color);
+    SDL_SetRenderClipRect(renderer, hadClip ? &prev : nullptr);
+}
+
+void fillRect(SDL_Renderer* renderer, const sg::Rect& r, sg::Color color)
+{
+    if (!renderer || color.a == 0 || r.w <= 0 || r.h <= 0)
+        return;
+    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+    SDL_FRect fr = { (float)r.x, (float)r.y, (float)r.w, (float)r.h };
+    SDL_RenderFillRect(renderer, &fr);
+}
+
+} //namespace sdlagent::ui
