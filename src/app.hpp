@@ -23,6 +23,7 @@
 namespace sdlagent::ui
 {
 class Panel;
+class VLine;
 class SessionList;
 class ChatPanel;
 class ArrowButton;
@@ -64,6 +65,7 @@ private:
     void handleAgentEvent(const AgentEvent& ev, bool& refresh, bool& force);
     void setBusyUi(bool busy);
     void showStatus(const std::string& text);
+    void updateUsageUi();
     static Uint32 SDLCALL logTimerProc(void* userdata, SDL_TimerID timerID,
                                        Uint32 interval);
 
@@ -108,6 +110,7 @@ private:
     ui::ArrowButton* toggleSidebar_ = nullptr;
     sdlgui::Label*   titleLabel_ = nullptr;
     ui::Panel*       contentTopbar_ = nullptr;
+    ui::VLine*       contentTopbarLine_ = nullptr;
     ui::ChatPanel*   chat_ = nullptr;
 
     std::unique_ptr<ui::SettingsDialog> settingsDialog_;
@@ -139,8 +142,6 @@ private:
     std::set<std::string> titleAttempted_;
 
     std::chrono::steady_clock::time_point lastRefresh_;
-    int  lastPromptTokens_ = 0;
-    int  lastCompletionTokens_ = 0;
     bool forceRefreshNext_ = false;
 };
 

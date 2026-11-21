@@ -18,7 +18,7 @@ namespace sdlagent::ui
 class ChatView;
 class InputBox;
 class Panel;
-class ArrowButton;
+class GlyphButton;
 
 //Right-hand pane: chat history + input box, split by a draggable divider.
 class ChatPanel : public sdlgui::SplitView
@@ -31,6 +31,8 @@ public:
     void setShowReasoning(bool show);
     void setStatus(const std::string& status);
     void setBusy(bool busy);
+    void setContextUsage(int tokens, int limit);
+    void setModelName(const std::string& model);
     void setImageInputSupported(bool supported);
     void setSessionsRoot(const std::filesystem::path& root);
 
@@ -72,14 +74,17 @@ private:
     void removeAttachment(std::size_t index);
     void rebuildAttachmentRow();
     void updateComposerLayout();
+    void updateHint();
 
     ChatView*            view_ = nullptr;
     Panel*               inputPanel_ = nullptr;
+    Panel*               inputFrame_ = nullptr;
     InputBox*            input_ = nullptr;
     sdlgui::Label*       hint_ = nullptr;
-    sdlgui::Button*      send_ = nullptr;
+    sdlgui::Label*       usageLabel_ = nullptr;
+    GlyphButton*         send_ = nullptr;
     sdlgui::Button*      stop_ = nullptr;
-    ArrowButton*         attachButton_ = nullptr;
+    GlyphButton*         attachButton_ = nullptr;
     sdlgui::Widget*      attachRow_ = nullptr;
     Session*             session_ = nullptr;
     std::filesystem::path sessionsRoot_;
@@ -88,6 +93,10 @@ private:
     bool                 imageAllowed_ = true;
     bool                 showReasoning_ = false;
     bool                 busy_ = false;
+    std::string          status_;
+    std::string          modelName_;
+    int                  usageTokens_ = 0;
+    int                  usageLimit_ = 0;
     bool                 confirmActive_ = false;
     std::string          confirmTool_;
     std::string          confirmSummary_;

@@ -109,6 +109,8 @@ struct Strings
     const char* temperature;
     const char* contextTokens;
     const char* maxTokens;
+    const char* reasoningEffort;
+    const char* reasoningDefault;
     const char* sessionsDir;
     const char* sessionsDirHint;
     const char* configDir;

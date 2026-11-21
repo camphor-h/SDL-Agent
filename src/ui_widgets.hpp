@@ -118,6 +118,34 @@ private:
     sdlgui::Color border_{ 0, 0, 0, 0 };
 };
 
+//Icon button drawn with plain lines: used by the composer (plus / return).
+class GlyphButton : public sdlgui::Widget
+{
+public:
+    enum class Glyph { Plus, Return };
+
+    explicit GlyphButton(sdlgui::Widget* parent = nullptr);
+
+    void setGlyph(Glyph glyph);
+    Glyph glyph() const { return glyph_; }
+
+    void setColors(sdlgui::Color bg, sdlgui::Color hover,
+                   sdlgui::Color pressed, sdlgui::Color glyph,
+                   sdlgui::Color border = sdlgui::Color(0, 0, 0, 0));
+
+    void onRender(SDL_Renderer* renderer) override;
+
+private:
+    Glyph glyph_ = Glyph::Plus;
+    bool  hover_ = false;
+    bool  pressed_ = false;
+    sdlgui::Color bg_{ 44, 46, 52, 255 };
+    sdlgui::Color hoverBg_{ 56, 58, 66, 255 };
+    sdlgui::Color pressedBg_{ 36, 38, 43, 255 };
+    sdlgui::Color glyphColor_{ 230, 232, 237, 255 };
+    sdlgui::Color border_{ 0, 0, 0, 0 };
+};
+
 //full-window dimming layer that centers one fixed-size panel
 class Modal : public sdlgui::Widget
 {

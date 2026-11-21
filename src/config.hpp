@@ -25,6 +25,7 @@ struct ApiProfile
     std::string baseUrl;
     std::string apiKey;
     std::string model;
+    std::string reasoningEffort; //empty = provider default
     double      temperature = 0.0;
     int         contextTokens = 1048576;
     int         maxTokens = 524288;
@@ -35,6 +36,7 @@ struct Config
     std::string baseUrl;
     std::string apiKey;
     std::string model;
+    std::string reasoningEffort; //empty = provider default
 
     double temperature = 0.0;
     int    contextTokens = 1048576;

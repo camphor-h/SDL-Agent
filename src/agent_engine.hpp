@@ -29,6 +29,7 @@ struct AgentRunConfig
     std::string baseUrl;
     std::string apiKey;
     std::string model;
+    std::string reasoningEffort; //empty = not sent
     std::string systemPrompt; //empty = built-in
     double      temperature = 0.0;
     int         maxTokens = 4096;
@@ -55,7 +56,6 @@ enum class AgentEventType
     ToolStarted,
     ToolFinished,
     Error,
-    Usage,
     Finished,
     ConfirmRequest
 };
@@ -66,8 +66,6 @@ struct AgentEvent
     std::string    sessionId;
     std::string    text;
     Message        message;
-    int            promptTokens = 0;
-    int            completionTokens = 0;
     bool           cancelled = false;
 };
 

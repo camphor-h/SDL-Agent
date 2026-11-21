@@ -287,6 +287,106 @@ void ArrowButton::onRender(SDL_Renderer* renderer)
     dirty_ = false;
 }
 
+GlyphButton::GlyphButton(sg::Widget* parent)
+    : sg::Widget(parent)
+{
+    onMouseEnter = [this](sg::MouseEvent&)
+    {
+        hover_ = true;
+        markDirty();
+    };
+    onMouseLeave = [this](sg::MouseEvent&)
+    {
+        hover_ = false;
+        pressed_ = false;
+        markDirty();
+    };
+    onMouseDown = [this](sg::MouseEvent&)
+    {
+        pressed_ = true;
+        markDirty();
+    };
+    onMouseUp = [this](sg::MouseEvent&)
+    {
+        pressed_ = false;
+        markDirty();
+    };
+}
+
+void GlyphButton::setGlyph(Glyph glyph)
+{
+    glyph_ = glyph;
+    markDirty();
+}
+
+void GlyphButton::setColors(sg::Color bg, sg::Color hover, sg::Color pressed,
+                            sg::Color glyph, sg::Color border)
+{
+    bg_ = bg;
+    hoverBg_ = hover;
+    pressedBg_ = pressed;
+    glyphColor_ = glyph;
+    border_ = border;
+    markDirty();
+}
+
+void GlyphButton::onRender(SDL_Renderer* renderer)
+{
+    if (!visible())
+        return;
+
+    sg::Rect r = absoluteRect();
+    sg::Color bg = pressed_ ? pressedBg_ : (hover_ ? hoverBg_ : bg_);
+    fillRect(renderer, r, bg);
+
+    if (border_.a != 0)
+    {
+        SDL_SetRenderDrawColor(renderer, border_.r, border_.g, border_.b,
+                               border_.a);
+        SDL_FRect fr = { (float)r.x, (float)r.y, (float)r.w, (float)r.h };
+        SDL_RenderRect(renderer, &fr);
+    }
+
+    SDL_SetRenderDrawColor(renderer, glyphColor_.r, glyphColor_.g,
+                           glyphColor_.b, glyphColor_.a);
+
+    float cx = (float)r.x + r.w * 0.5f;
+    float cy = (float)r.y + r.h * 0.5f;
+    float s = std::min(r.w, r.h) * 0.20f;
+    if (s < 4.0f)
+        s = 4.0f;
+
+    if (glyph_ == Glyph::Plus)
+    {
+        for (int offset = -1; offset <= 1; ++offset)
+        {
+            float o = (float)offset;
+            SDL_RenderLine(renderer, cx - s, cy + o, cx + s, cy + o);
+            SDL_RenderLine(renderer, cx + o, cy - s, cx + o, cy + s);
+        }
+        dirty_ = false;
+        return;
+    }
+
+    //Return symbol: up the right side, across the bottom, arrow at the left.
+    float tipX = cx - s * 1.15f;
+    float tailX = cx + s * 0.85f;
+    float topY = cy - s * 0.95f;
+    float botY = cy + s * 0.35f;
+    float head = s * 0.65f;
+
+    for (int offset = -1; offset <= 1; ++offset)
+    {
+        float o = (float)offset;
+        SDL_RenderLine(renderer, tailX + o, topY, tailX + o, botY);
+        SDL_RenderLine(renderer, tailX, botY + o, tipX, botY + o);
+        SDL_RenderLine(renderer, tipX + o, botY, tipX + head, botY - head);
+        SDL_RenderLine(renderer, tipX + o, botY, tipX + head, botY + head);
+    }
+
+    dirty_ = false;
+}
+
 Modal::Modal(sg::Widget* parent)
     : sg::Widget(parent)
 {

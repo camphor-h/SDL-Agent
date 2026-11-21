@@ -49,6 +49,24 @@ int estimateButtonWidth(const std::string& text)
     return std::clamp(w, 72, 220);
 }
 
+//Group thousands with commas, e.g. 1234567 -> "1,234,567".
+std::string formatCount(long long value)
+{
+    if (value < 0)
+        value = 0;
+    std::string digits = std::to_string(value);
+    std::string out;
+    out.reserve(digits.size() + digits.size() / 3);
+    int lead = (int)(digits.size() % 3);
+    for (std::size_t i = 0; i < digits.size(); ++i)
+    {
+        if (i > 0 && (int)(i % 3) == lead)
+            out.push_back(',');
+        out.push_back(digits[i]);
+    }
+    return out;
+}
+
 //Percent-encoded file:// URL so paths with spaces or CJK characters open
 //correctly through the platform's default handler.
 std::string fileUrl(const std::filesystem::path& p)
@@ -111,7 +129,7 @@ ChatPanel::ChatPanel(sg::Widget* parent)
     setOrientation(sg::SplitView::Orientation::Stacked);
     setSplit(0.78f);
     setMinPaneSize(120);
-    setDividerWidth(6);
+    setDividerWidth(1);
 
     view_ = addChild<ChatView>();
     view_->onLinkClick = [this](const std::string& href)
@@ -215,11 +233,20 @@ ChatPanel::ChatPanel(sg::Widget* parent)
                            8, 6, 8, 0);
     attachRow_->setVisible(false);
 
-    input_ = inputPanel_->addChild<InputBox>();
-    input_->pos(8, 8)->sz(400, 80);
+    //Visible input box. The text area sits above a bottom strip that holds the
+    //attach and send buttons, so wrapped text never runs under them.
+    inputFrame_ = inputPanel_->addChild<Panel>();
+    inputFrame_->pos(8, 8)->sz(400, 80);
+    inputFrame_->setAnchors(sg::AnchorLeft | sg::AnchorTop |
+                                sg::AnchorRight | sg::AnchorBottom,
+                            8, 8, 8, 34);
+    inputFrame_->setColors(sg::Color(24, 25, 29), sg::Color(58, 60, 66), 1);
+
+    input_ = inputFrame_->addChild<InputBox>();
+    input_->pos(5, 5)->sz(400, 80);
     input_->setAnchors(sg::AnchorLeft | sg::AnchorTop | sg::AnchorRight |
                            sg::AnchorBottom,
-                       8, 8, 8, 40);
+                       5, 5, 5, 38);
     input_->setWordWrap(true);
     input_->setLineSpacing(2);
     input_->scrollbarH(false);
@@ -251,31 +278,40 @@ ChatPanel::ChatPanel(sg::Widget* parent)
         }
     };
 
-    attachButton_ = inputPanel_->addChild<ArrowButton>();
-    attachButton_->pos(0, 0)->sz(32, 28);
-    attachButton_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 102, 9);
-    attachButton_->setDirection(ArrowButton::Direction::Up);
+    attachButton_ = inputFrame_->addChild<GlyphButton>();
+    attachButton_->pos(0, 0)->sz(30, 30);
+    attachButton_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 64, 7);
+    attachButton_->setGlyph(GlyphButton::Glyph::Plus);
     attachButton_->onClick = [this](sg::MouseEvent&) { openFileDialog(); };
 
     hint_ = inputPanel_->addChild<sg::Label>();
     hint_->pos(14, 18)->sz(420, 18);
-    hint_->setAnchors(sg::AnchorLeft | sg::AnchorBottom, 14, 0, 0, 14);
+    hint_->setAnchors(sg::AnchorLeft | sg::AnchorRight | sg::AnchorBottom,
+                      14, 0, 14, 14);
     hint_->setText("");
     hint_->setTextColor(sg::Color(150, 153, 160));
 
-    send_ = inputPanel_->addChild<sg::Button>();
-    send_->pos(0, 0)->sz(84, 28);
-    send_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 12, 9);
-    send_->setText(tr().send);
+    usageLabel_ = inputPanel_->addChild<sg::Label>();
+    usageLabel_->pos(0, 0)->sz(80, 18);
+    usageLabel_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 14, 14);
+    usageLabel_->setText("");
+    usageLabel_->setTextColor(sg::Color(150, 153, 160));
+    usageLabel_->setVisible(false);
+
+    //Golden-ratio rectangle (48 x 30) with the return symbol.
+    send_ = inputFrame_->addChild<GlyphButton>();
+    send_->pos(0, 0)->sz(48, 30);
+    send_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 8, 7);
+    send_->setGlyph(GlyphButton::Glyph::Return);
     send_->onClick = [this](sg::MouseEvent&)
     {
         if (onSend)
             onSend(input_->text());
     };
 
-    stop_ = inputPanel_->addChild<sg::Button>();
-    stop_->pos(0, 0)->sz(84, 28);
-    stop_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 12, 9);
+    stop_ = inputFrame_->addChild<sg::Button>();
+    stop_->pos(0, 0)->sz(48, 30);
+    stop_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 8, 7);
     stop_->setText(tr().stop);
     stop_->setVisible(false);
     stop_->onClick = [this](sg::MouseEvent&)
@@ -420,12 +456,12 @@ void ChatPanel::rebuildAttachmentRow()
 
 void ChatPanel::updateComposerLayout()
 {
-    if (!input_)
+    if (!inputFrame_)
         return;
     int top = pending_.empty() ? 8 : 40;
-    input_->setAnchors(sg::AnchorLeft | sg::AnchorTop | sg::AnchorRight |
-                           sg::AnchorBottom,
-                       8, top, 8, 40);
+    inputFrame_->setAnchors(sg::AnchorLeft | sg::AnchorTop |
+                                sg::AnchorRight | sg::AnchorBottom,
+                            8, top, 8, 34);
     if (getWindow())
         getWindow()->requestRedraw();
 }
@@ -504,8 +540,68 @@ void ChatPanel::setShowReasoning(bool show)
 
 void ChatPanel::setStatus(const std::string& status)
 {
-    if (hint_)
-        hint_->setText(status);
+    status_ = status;
+    updateHint();
+}
+
+void ChatPanel::setContextUsage(int tokens, int limit)
+{
+    usageTokens_ = tokens > 0 ? tokens : 0;
+    usageLimit_ = limit > 0 ? limit : 0;
+    updateHint();
+}
+
+void ChatPanel::setModelName(const std::string& model)
+{
+    modelName_ = model;
+    updateHint();
+}
+
+void ChatPanel::updateHint()
+{
+    if (!hint_)
+        return;
+
+    std::string usage;
+    if (usageTokens_ > 0)
+    {
+        usage = formatCount(usageTokens_);
+        if (usageLimit_ > 0)
+        {
+            long long percent =
+                ((long long)usageTokens_ * 100 + usageLimit_ / 2) / usageLimit_;
+            if (percent > 999)
+                percent = 999;
+            usage += " (" + std::to_string(percent) + "%)";
+        }
+    }
+
+    std::string text = modelName_;
+    auto append = [&text](const std::string& part)
+    {
+        if (part.empty())
+            return;
+        if (!text.empty())
+            text += " · ";
+        text += part;
+    };
+    append(status_);
+    hint_->setText(text);
+
+    if (!usageLabel_)
+        return;
+
+    int usageW = usage.empty() ? 0 : textWidth(usage);
+    usageLabel_->setText(usage);
+    usageLabel_->setVisible(!usage.empty());
+    if (!usage.empty())
+    {
+        usageLabel_->setSize(usageW, 18);
+        usageLabel_->setAnchors(sg::AnchorRight | sg::AnchorBottom,
+                                0, 0, 14, 14);
+    }
+    hint_->setAnchors(sg::AnchorLeft | sg::AnchorRight | sg::AnchorBottom,
+                      14, 0, usage.empty() ? 14 : 14 + usageW + 12, 14);
 }
 
 void ChatPanel::setBusy(bool busy)
@@ -516,8 +612,8 @@ void ChatPanel::setBusy(bool busy)
     if (stop_)
         stop_->setVisible(busy);
 
-    if (hint_)
-        hint_->setText(busy ? tr().statusThinking : "");
+    status_ = busy ? tr().statusThinking : "";
+    updateHint();
 
     if (getWindow())
         getWindow()->requestRedraw();
@@ -740,6 +836,7 @@ void ChatPanel::applyTheme(const sg::Theme& theme)
 {
     accentColor_ = theme.menuAccent;
     mutedColor_ = theme.mutedText;
+    setDividerColor(sg::Color(0, 0, 0, 255));
 
     int lum = (theme.windowBg.r * 299 + theme.windowBg.g * 587 +
                theme.windowBg.b * 114) / 1000;
@@ -756,14 +853,34 @@ void ChatPanel::applyTheme(const sg::Theme& theme)
 
     if (inputPanel_)
         inputPanel_->setColors(theme.panelBg, theme.divider, 1);
+    if (inputFrame_)
+        inputFrame_->setColors(theme.inputBg, theme.inputBorder, 1);
+    if (input_)
+    {
+        input_->setBackgroundColor(theme.inputBg);
+        input_->setBorderColor(theme.inputBg);
+    }
     if (attachButton_)
     {
-        attachButton_->setColors(theme.buttonBg, theme.buttonHover,
-                                 theme.buttonPressed, theme.buttonText,
-                                 theme.border);
+        attachButton_->setColors(theme.inputBg, theme.buttonHover,
+                                 theme.buttonPressed, theme.mutedText);
+    }
+    if (send_)
+    {
+        send_->setColors(theme.inputBg, theme.buttonHover,
+                         theme.buttonPressed, theme.mutedText);
+    }
+    if (stop_)
+    {
+        stop_->setBgColor(theme.buttonBg, theme.buttonHover,
+                          theme.buttonPressed);
+        stop_->setTextColor(theme.buttonText);
+        stop_->setBorderColor(theme.border);
     }
     if (hint_)
         hint_->setTextColor(theme.mutedText);
+    if (usageLabel_)
+        usageLabel_->setTextColor(theme.mutedText);
     if (input_)
         input_->placeholderColor = theme.mutedText;
     if (view_)

@@ -65,6 +65,10 @@ Json toJson(const Session& s)
             jm.set("reasoning", m.reasoning);
         if (!m.toolCalls.empty() && m.toolCalls != "[]")
             jm.set("toolCalls", m.toolCalls);
+        if (m.promptTokens > 0)
+            jm.set("promptTokens", m.promptTokens);
+        if (m.completionTokens > 0)
+            jm.set("completionTokens", m.completionTokens);
         if (!m.toolCallId.empty())
             jm.set("toolCallId", m.toolCallId);
         if (!m.toolName.empty())
@@ -125,6 +129,8 @@ Session sessionFromJson(const Json& j)
             m.toolCalls = jm["toolCalls"].str();
             if (m.toolCalls == "[]")
                 m.toolCalls.clear();
+            m.promptTokens = (int)jm["promptTokens"].integer(0);
+            m.completionTokens = (int)jm["completionTokens"].integer(0);
             m.toolCallId = jm["toolCallId"].str();
             m.toolName = jm["toolName"].str();
             m.timestamp = (uint64_t)jm["timestamp"].integer(0);

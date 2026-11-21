@@ -55,6 +55,9 @@ sg::Theme makeTheme(bool light)
         t.dialogBg = sg::Color(250, 250, 252);
         t.dialogBorder = sg::Color(200, 203, 210);
         t.dialogTitleText = sg::Color(40, 42, 48);
+        t.rowHover = sg::Color(228, 230, 235);
+        t.rowSelected = sg::Color(224, 236, 250);
+        t.rowSelectedText = sg::Color(20, 20, 20);
         t.overlay = sg::Color(20, 22, 26, 120);
         return t;
     }
@@ -86,7 +89,7 @@ sg::Theme makeTheme(bool light)
     t.textAreaSelection = sg::Color(52, 92, 160, 175);
 
     t.rowHover = sg::Color(38, 40, 46);
-    t.rowSelected = sg::Color(45, 72, 112);
+    t.rowSelected = sg::Color(52, 80, 122);
     t.rowSelectedText = sg::Color(255, 255, 255);
 
     t.scrollTrack = sg::Color(30, 31, 35);
@@ -423,7 +426,7 @@ void App::buildUi()
     mainSplit_->setOrientation(sg::SplitView::Orientation::SideBySide);
     mainSplit_->setSplit(0.23f);
     mainSplit_->setMinPaneSize(180);
-    mainSplit_->setDividerWidth(6);
+    mainSplit_->setDividerWidth(1);
 
     sidebar_ = mainSplit_->addChild<ui::Panel>();
     sidebar_->setColors(sg::Color(30, 31, 35), sg::Color(0, 0, 0, 0), 0);
@@ -439,7 +442,7 @@ void App::buildUi()
     sep->pos(0, 58)->sz(200, 1);
     sep->setAnchors(sg::AnchorLeft | sg::AnchorRight | sg::AnchorTop,
                     0, 58, 0, 0);
-    sep->setColor(sg::Color(50, 52, 58));
+    sep->setColor(sg::Color(0, 0, 0, 255));
 
     sessionList_ = sidebar_->addChild<ui::SessionList>();
     sessionList_->pos(0, 64)->sz(200, 300);
@@ -480,7 +483,17 @@ void App::buildUi()
     contentTopbar_->setAnchors(sg::AnchorLeft | sg::AnchorTop |
                                    sg::AnchorRight,
                                0, 0, 0, 0);
-    contentTopbar_->setColors(sg::Color(30, 31, 35), sg::Color(50, 52, 58), 1);
+    contentTopbar_->setColors(sg::Color(30, 31, 35),
+                              sg::Color(0, 0, 0, 0), 0);
+
+    //Separator under the topbar. A Panel border would also draw a vertical
+    //line on the left, doubling the split divider.
+    contentTopbarLine_ = contentTopbar_->addChild<ui::VLine>();
+    contentTopbarLine_->pos(0, 41)->sz(400, 1);
+    contentTopbarLine_->setAnchors(sg::AnchorLeft | sg::AnchorRight |
+                                       sg::AnchorBottom,
+                                   0, 0, 0, 0);
+    contentTopbarLine_->setColor(sg::Color(0, 0, 0, 255));
 
     toggleSidebar_ = contentTopbar_->addChild<ui::ArrowButton>();
     toggleSidebar_->pos(8, 7)->sz(32, 28);
@@ -560,14 +573,22 @@ void App::applyTheme(const std::string& themeName)
     sg::Theme theme = makeTheme(themeName == "light");
     win_->setTheme(theme);
 
+    if (mainSplit_)
+        mainSplit_->setDividerColor(sg::Color(0, 0, 0, 255));
     if (sidebar_)
         sidebar_->setColors(theme.panelBg, theme.panelBorder, 0);
     if (contentTopbar_)
-        contentTopbar_->setColors(theme.panelBg, theme.divider, 1);
+        contentTopbar_->setColors(theme.panelBg, sg::Color(0, 0, 0, 0), 0);
+    if (contentTopbarLine_)
+        contentTopbarLine_->setColor(sg::Color(0, 0, 0, 255));
     if (sessionList_)
     {
+        sg::Color selectedBar = themeName == "light"
+                                    ? sg::Color(45, 95, 170)
+                                    : sg::Color(88, 150, 230);
         sessionList_->setThemeColors(theme.text, theme.mutedText,
                                      theme.rowHover, theme.rowSelected,
+                                     selectedBar,
                                      theme.rowSelectedText, theme.border,
                                      theme.scrollTrack, theme.scrollThumb);
     }
@@ -575,9 +596,19 @@ void App::applyTheme(const std::string& themeName)
         chat_->applyTheme(theme);
     if (newChatButton_)
     {
-        newChatButton_->setBgColor(theme.panelBg, theme.buttonHover,
-                                   theme.buttonPressed);
-        newChatButton_->setTextColor(theme.menuAccent);
+        auto shade = [](sg::Color c, int delta)
+        {
+            auto clamp = [](int v)
+            {
+                return (uint8_t)(v < 0 ? 0 : (v > 255 ? 255 : v));
+            };
+            return sg::Color(clamp(c.r + delta), clamp(c.g + delta),
+                             clamp(c.b + delta), c.a);
+        };
+        newChatButton_->setBgColor(theme.menuAccent,
+                                   shade(theme.menuAccent, 14),
+                                   shade(theme.menuAccent, -14));
+        newChatButton_->setTextColor(sg::Color(255, 255, 255));
         newChatButton_->setBorderColor(theme.menuAccent);
     }
     if (toggleSidebar_)
@@ -710,6 +741,8 @@ void App::selectSession(const std::string& id)
     {
         chat_->setSession(s);
         chat_->setShowReasoning(config_.showReasoning);
+        chat_->setModelName(config_.model);
+        updateUsageUi();
     }
     if (sessionList_)
         sessionList_->setActive(id);
@@ -995,6 +1028,7 @@ AgentRunConfig App::makeRunConfig(const std::string& sessionId) const
     rc.baseUrl = config_.baseUrl;
     rc.apiKey = config_.apiKey;
     rc.model = config_.model;
+    rc.reasoningEffort = config_.reasoningEffort;
     rc.headers = provider::headersFor(config_.baseUrl, config_.model,
                                       sessionId);
     rc.temperature = config_.temperature;
@@ -1077,7 +1111,11 @@ void App::sendMessage(const std::string& text)
     if (!s)
         return;
     if (chat_)
+    {
         chat_->setSession(s);
+        chat_->setModelName(config_.model);
+        updateUsageUi();
+    }
 
     if (s->title.empty() || s->title.rfind(tr().untitled, 0) == 0)
     {
@@ -1155,6 +1193,27 @@ void App::showStatus(const std::string& text)
 {
     if (chat_)
         chat_->setStatus(text);
+}
+
+void App::updateUsageUi()
+{
+    if (!chat_)
+        return;
+
+    int tokens = 0;
+    if (Session* s = currentSession())
+    {
+        for (auto it = s->messages.rbegin(); it != s->messages.rend(); ++it)
+        {
+            if (it->role != Role::Assistant)
+                continue;
+            if (it->promptTokens <= 0 && it->completionTokens <= 0)
+                continue;
+            tokens = it->promptTokens + it->completionTokens;
+            break;
+        }
+    }
+    chat_->setContextUsage(tokens, config_.contextTokens);
 }
 
 void App::onAgentEvents()
@@ -1270,6 +1329,8 @@ void App::handleAgentEvent(const AgentEvent& ev, bool& refresh, bool& force)
                         ev.message.content.size(),
                         ev.message.reasoning.size(),
                         ev.message.toolCalls.empty() ? "no" : "yes");
+            if (ev.sessionId == currentId_)
+                updateUsageUi();
             s->updatedAt = nowMs();
             saveSession();
             refresh = true;
@@ -1313,10 +1374,6 @@ void App::handleAgentEvent(const AgentEvent& ev, bool& refresh, bool& force)
             break;
         }
 
-        case AgentEventType::Usage:
-            lastPromptTokens_ = ev.promptTokens;
-            lastCompletionTokens_ = ev.completionTokens;
-            break;
         case AgentEventType::Finished:
         {
             if (Message* live = findLive())
@@ -1333,14 +1390,8 @@ void App::handleAgentEvent(const AgentEvent& ev, bool& refresh, bool& force)
 
             std::string status = ev.cancelled ? tr().statusCancelled
                                               : tr().statusReady;
-            if (!ev.cancelled &&
-                (lastPromptTokens_ > 0 || lastCompletionTokens_ > 0))
-            {
-                status += " · " + std::to_string(lastPromptTokens_) + " + " +
-                          std::to_string(lastCompletionTokens_) + " " +
-                          tr().tokenUsage;
-            }
             showStatus(status);
+            updateUsageUi();
 
             if (!ev.cancelled)
                 maybeStartTitleJob(*s);
@@ -1619,12 +1670,14 @@ bool App::saveConfigFromDialog(const Config& cfg, std::string& err)
     if (chat_)
     {
         chat_->setShowReasoning(config_.showReasoning);
+        chat_->setModelName(config_.model);
         if (!engine_.busy())
             chat_->setStatus("");
         bool foundModel = false;
         bool imageSupport = catalog::supportsImage(config_.model, &foundModel);
         chat_->setImageInputSupported(!foundModel || imageSupport);
     }
+    updateUsageUi();
     updateTopbar();
     refreshSidebar();
 

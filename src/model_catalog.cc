@@ -3,6 +3,7 @@
 #include "model_catalog.hpp"
 
 #include "paths.hpp"
+#include "util.hpp"
 
 #include <cjson/cJSON.h>
 
@@ -114,6 +115,39 @@ void readModels(const cJSON* modelsObj, std::vector<Model>& out)
         {
             m.costInput = doubleField(cost, "input");
             m.costOutput = doubleField(cost, "output");
+        }
+
+        const cJSON* options =
+            cJSON_GetObjectItemCaseSensitive(item, "reasoning_options");
+        if (cJSON_IsArray(options))
+        {
+            for (const cJSON* option = options->child; option;
+                 option = option->next)
+            {
+                if (!cJSON_IsObject(option))
+                    continue;
+                if (stringField(option, "type") != "effort")
+                    continue;
+
+                const cJSON* values =
+                    cJSON_GetObjectItemCaseSensitive(option, "values");
+                if (!cJSON_IsArray(values))
+                    continue;
+
+                for (const cJSON* value = values->child; value;
+                     value = value->next)
+                {
+                    if (!cJSON_IsString(value) || !value->valuestring)
+                        continue;
+                    std::string effort = value->valuestring;
+                    if (effort.empty() || effort == "null")
+                        continue;
+                    if (std::find(m.efforts.begin(), m.efforts.end(), effort) !=
+                        m.efforts.end())
+                        continue;
+                    m.efforts.push_back(std::move(effort));
+                }
+            }
         }
 
         if (!m.id.empty())
@@ -257,6 +291,40 @@ bool supportsImage(const std::string& modelId, bool* found)
         }
     }
     return false;
+}
+
+std::vector<std::string> reasoningEfforts(const std::string& modelId,
+                                          const std::string& baseUrl)
+{
+    std::vector<std::string> out;
+    if (modelId.empty())
+        return out;
+
+    const Catalog& cat = load();
+    std::string base = lower(trim(baseUrl));
+    while (!base.empty() && base.back() == '/')
+        base.pop_back();
+
+    const Model* fallback = nullptr;
+    for (const Provider& p : cat.providers)
+    {
+        std::string api = lower(p.api);
+        while (!api.empty() && api.back() == '/')
+            api.pop_back();
+        bool sameApi = !base.empty() && !api.empty() &&
+                       (base == api || startsWith(base, api + "/"));
+
+        for (const Model& m : p.models)
+        {
+            if (m.id != modelId || m.efforts.empty())
+                continue;
+            if (sameApi)
+                return m.efforts;
+            if (!fallback)
+                fallback = &m;
+        }
+    }
+    return fallback ? fallback->efforts : out;
 }
 
 } //namespace sdlagent::catalog

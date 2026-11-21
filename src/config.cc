@@ -59,6 +59,7 @@ Config loadConfig(const std::filesystem::path& file)
     cfg.baseUrl = j["baseUrl"].str();
     cfg.apiKey = j["apiKey"].str();
     cfg.model = j["model"].str();
+    cfg.reasoningEffort = j["reasoningEffort"].str();
     cfg.dataDir = j["dataDir"].str();
     cfg.sessionsDir = j["sessionsDir"].str();
     cfg.theme = j["theme"].str("light");
@@ -109,6 +110,7 @@ Config loadConfig(const std::filesystem::path& file)
             ap.baseUrl = p["baseUrl"].str();
             ap.apiKey = p["apiKey"].str();
             ap.model = p["model"].str();
+            ap.reasoningEffort = p["reasoningEffort"].str();
             ap.temperature = p["temperature"].number(0.0);
             ap.contextTokens = (int)p["contextTokens"].integer(1048576);
             ap.maxTokens = (int)p["maxTokens"].integer(524288);
@@ -218,6 +220,7 @@ bool saveConfig(const std::filesystem::path& file, const Config& cfg,
             .set("baseUrl", p.baseUrl)
             .set("apiKey", p.apiKey)
             .set("model", p.model)
+            .set("reasoningEffort", p.reasoningEffort)
             .set("temperature", p.temperature)
             .set("contextTokens", p.contextTokens)
             .set("maxTokens", p.maxTokens);
@@ -231,6 +234,7 @@ bool saveConfig(const std::filesystem::path& file, const Config& cfg,
         .set("baseUrl", cfg.baseUrl)
         .set("apiKey", cfg.apiKey)
         .set("model", cfg.model)
+        .set("reasoningEffort", cfg.reasoningEffort)
         .set("temperature", cfg.temperature)
         .set("contextTokens", cfg.contextTokens)
         .set("maxTokens", cfg.maxTokens)

@@ -294,7 +294,7 @@ void SettingsDialog::build(sg::Widget* root)
         }
     };
 
-    makePage(formScroll_, formContent_, 360);
+    makePage(formScroll_, formContent_, 430);
     makePage(appearanceScroll_, appearanceContent_, 440);
     makePage(customScroll_, customContent_, 600);
     makePage(aboutScroll_, aboutContent_, 460);
@@ -340,6 +340,7 @@ void SettingsDialog::build(sg::Widget* root)
                     error_->setText("该供应商没有提供 API 地址，请手动填写。");
 
                 model_->setText(m.id);
+                refreshReasoningOptions(m.id, trim(baseUrl_->text()), "");
                 if (m.context > 0)
                 {
                     int ctx = std::max(256, std::min(m.context, 1048576));
@@ -360,6 +361,12 @@ void SettingsDialog::build(sg::Widget* root)
                                sg::Color(200, 203, 210));
     contextTokens_ = addTextBox(formContent_, 0, y + 22, 260);
     maxTokens_ = addTextBox(formContent_, 340, y + 22, 260);
+    y += 62;
+
+    reasoningLabel_ = addLabel(formContent_, 0, y, 220, tr().reasoningEffort,
+                               sg::Color(200, 203, 210));
+    reasoningEffort_ = formContent_->addChild<sg::DropDown>();
+    reasoningEffort_->pos(0, y + 22)->sz(260, 30);
 
     //Appearance page
     y = 0;
@@ -641,7 +648,7 @@ void SettingsDialog::layoutFields(int panelW, int)
         sv->setContentSize(contentW, height);
     };
 
-    setPage(formScroll_, formContent_, 360);
+    setPage(formScroll_, formContent_, 430);
     setPage(appearanceScroll_, appearanceContent_, 440);
     setPage(customScroll_, customContent_, 600);
     setPage(aboutScroll_, aboutContent_, 460);
@@ -943,6 +950,7 @@ void SettingsDialog::editProfile(int index)
         model_->setText(p.model);
         contextTokens_->setText(tokensText(p.contextTokens));
         maxTokens_->setText(tokensText(p.maxTokens));
+        refreshReasoningOptions(p.model, p.baseUrl, p.reasoningEffort);
     }
     else
     {
@@ -953,10 +961,37 @@ void SettingsDialog::editProfile(int index)
         model_->setText("");
         contextTokens_->setText("1m");
         maxTokens_->setText("512k");
+        refreshReasoningOptions("", "", "");
     }
 
     error_->setText("");
     selectPage(4);
+}
+
+void SettingsDialog::refreshReasoningOptions(const std::string& modelId,
+                                             const std::string& baseUrl,
+                                             const std::string& selected)
+{
+    if (!reasoningEffort_)
+        return;
+
+    effortValues_ = catalog::reasoningEfforts(modelId, baseUrl);
+
+    reasoningEffort_->clear();
+    reasoningEffort_->addItem(tr().reasoningDefault);
+    for (const std::string& value : effortValues_)
+        reasoningEffort_->addItem(value);
+
+    int index = 0;
+    for (std::size_t i = 0; i < effortValues_.size(); ++i)
+    {
+        if (effortValues_[i] == selected)
+        {
+            index = (int)i + 1;
+            break;
+        }
+    }
+    reasoningEffort_->setSelectedIndex(index);
 }
 
 void SettingsDialog::saveProfileForm()
@@ -974,6 +1009,19 @@ void SettingsDialog::saveProfileForm()
         p.baseUrl = "https://" + p.baseUrl;
     p.apiKey = trim(apiKey_->text());
     p.model = trim(model_->text());
+    if (reasoningEffort_ && reasoningEffort_->selectedIndex() > 0 &&
+        reasoningEffort_->selectedIndex() <= (int)effortValues_.size())
+    {
+        p.reasoningEffort = effortValues_[reasoningEffort_->selectedIndex() - 1];
+    }
+    if (!p.reasoningEffort.empty())
+    {
+        std::vector<std::string> allowed =
+            catalog::reasoningEfforts(p.model, p.baseUrl);
+        if (std::find(allowed.begin(), allowed.end(), p.reasoningEffort) ==
+            allowed.end())
+            p.reasoningEffort.clear();
+    }
     p.temperature = 0.0;
 
     long long context = 0;
@@ -1167,6 +1215,7 @@ void SettingsDialog::accept()
         cfg.baseUrl = active->baseUrl;
         cfg.apiKey = active->apiKey;
         cfg.model = active->model;
+        cfg.reasoningEffort = active->reasoningEffort;
         cfg.temperature = active->temperature;
         cfg.contextTokens = active->contextTokens;
         cfg.maxTokens = active->maxTokens;
@@ -1176,6 +1225,7 @@ void SettingsDialog::accept()
         cfg.baseUrl.clear();
         cfg.apiKey.clear();
         cfg.model.clear();
+        cfg.reasoningEffort.clear();
         cfg.temperature = 0.0;
         cfg.contextTokens = 1048576;
         cfg.maxTokens = 524288;

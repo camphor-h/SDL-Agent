@@ -44,6 +44,10 @@ struct Message
     std::string reasoning;
     std::string toolCalls; //serialized OpenAI tool_calls array
 
+    //assistant only: token usage reported by the provider for this step
+    int promptTokens = 0;
+    int completionTokens = 0;
+
     //tool result only
     std::string toolCallId;
     std::string toolName;

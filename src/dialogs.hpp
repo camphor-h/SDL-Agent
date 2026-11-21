@@ -71,6 +71,9 @@ private:
     void rebuildProfileList();
     void editProfile(int index);
     void saveProfileForm();
+    void refreshReasoningOptions(const std::string& modelId,
+                                 const std::string& baseUrl,
+                                 const std::string& selected);
     void deleteSelectedProfile();
     void updateFontSummary();
     void refreshLogs();
@@ -122,6 +125,9 @@ private:
     sdlgui::TextBox*  contextTokens_ = nullptr;
     sdlgui::Label*    maxTokensLabel_ = nullptr;
     sdlgui::TextBox*  maxTokens_ = nullptr;
+    sdlgui::Label*    reasoningLabel_ = nullptr;
+    sdlgui::DropDown* reasoningEffort_ = nullptr;
+    std::vector<std::string> effortValues_;
     sdlgui::Button*   catalogButton_ = nullptr;
     std::unique_ptr<ModelCatalogDialog> catalogDialog_;
     std::unique_ptr<ApiUpdateDialog>    apiUpdateDialog_;

@@ -18,6 +18,7 @@ struct Model
     int         output = 0;
     bool        toolCall = false;
     bool        imageInput = false;
+    std::vector<std::string> efforts; //api.json reasoning effort values
     double      costInput = 0.0;
     double      costOutput = 0.0;
 };
@@ -49,5 +50,10 @@ const Catalog& load(bool force = false);
 //Looks up a model id across all providers. Returns true only when the model
 //was found and declares image input; `found` reports whether it was found.
 bool supportsImage(const std::string& modelId, bool* found = nullptr);
+
+//Reasoning effort values declared by api.json for a model, in catalog order.
+//Empty when the model is unknown or only supports a reasoning toggle.
+std::vector<std::string> reasoningEfforts(const std::string& modelId,
+                                          const std::string& baseUrl);
 
 } //namespace sdlagent::catalog

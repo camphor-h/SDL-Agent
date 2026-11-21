@@ -490,10 +490,10 @@ std::string detectSystemFontPath()
 #ifdef _WIN32
     const char* windir = SDL_getenv("WINDIR");
     std::string base = (windir && *windir) ? windir : "C:\\Windows";
-    //Prefer SimHei (黑体) by default.
-    candidates.push_back(base + "\\Fonts\\simhei.ttf");
-    candidates.push_back(base + "\\Fonts\\msyh.ttc");
+    //Prefer Microsoft YaHei Bold for Simplified Chinese by default.
     candidates.push_back(base + "\\Fonts\\msyhbd.ttc");
+    candidates.push_back(base + "\\Fonts\\msyh.ttc");
+    candidates.push_back(base + "\\Fonts\\simhei.ttf");
     candidates.push_back(base + "\\Fonts\\simsun.ttc");
     candidates.push_back(base + "\\Fonts\\segoeui.ttf");
 #elif defined(__APPLE__)

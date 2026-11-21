@@ -507,6 +507,8 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
         llmapiReqSetTemperature(req, cfg.temperature);
         if (!omitMaxTokens && cfg.maxTokens > 0)
             llmapiReqSetMaxTokens(req, (size_t)cfg.maxTokens);
+        if (!cfg.reasoningEffort.empty())
+            llmapiReqSet(req, "reasoning_effort", cfg.reasoningEffort.c_str());
 
         if (toolsEnabled)
         {
@@ -623,15 +625,9 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
 
         int totalTokens = 0, promptTokens = 0, completionTokens = 0;
         llmapiStreamGetUsage(ctx, &totalTokens, &promptTokens, &completionTokens);
-        if (totalTokens > 0 || promptTokens > 0 || completionTokens > 0)
-        {
-            AgentEvent ev;
-            ev.type = AgentEventType::Usage;
-            ev.sessionId = sid;
-            ev.promptTokens = promptTokens;
-            ev.completionTokens = completionTokens;
-            pushEvent(std::move(ev));
-        }
+        if (promptTokens < 0) promptTokens = 0;
+        if (completionTokens < 0) completionTokens = 0;
+        (void)totalTokens;
 
         if (cancel_.load(std::memory_order_relaxed))
         {
@@ -669,6 +665,8 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
         assistant.reasoning = acc.thinking;
         assistant.toolCalls = buildToolCallsJson(acc.calls);
         assistant.timestamp = nowMs();
+        assistant.promptTokens = promptTokens;
+        assistant.completionTokens = completionTokens;
 
         if (assistant.content.empty() && assistant.reasoning.empty() &&
             (assistant.toolCalls.empty() || assistant.toolCalls == "[]"))

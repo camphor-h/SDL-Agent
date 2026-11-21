@@ -92,6 +92,7 @@ void SessionList::setActive(const std::string& id)
 
 void SessionList::setThemeColors(sg::Color text, sg::Color muted,
                                  sg::Color hover, sg::Color selected,
+                                 sg::Color selectedBar,
                                  sg::Color selectedText, sg::Color border,
                                  sg::Color scrollTrack, sg::Color scrollThumb)
 {
@@ -99,6 +100,7 @@ void SessionList::setThemeColors(sg::Color text, sg::Color muted,
     mutedColor_ = muted;
     hoverColor_ = hover;
     selectedColor_ = selected;
+    selectedBarColor_ = selectedBar;
     selectedTextColor_ = selectedText;
     borderColor_ = border;
     scrollTrack_ = scrollTrack;
@@ -262,8 +264,12 @@ void SessionList::onRender(SDL_Renderer* renderer)
         bool hover = (i == hoverRow_);
 
         if (active)
+        {
             fillRect(renderer, { r.x + 6, y + 1, r.w - 12, row.h - 2 },
                      selectedColor_);
+            fillRect(renderer, { r.x + 6, y + 1, 4, row.h - 2 },
+                     selectedBarColor_);
+        }
         else if (hover)
             fillRect(renderer, { r.x + 6, y + 1, r.w - 12, row.h - 2 },
                      hoverColor_);

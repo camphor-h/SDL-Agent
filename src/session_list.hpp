@@ -29,6 +29,7 @@ public:
 
     void setThemeColors(sdlgui::Color text, sdlgui::Color muted,
                         sdlgui::Color hover, sdlgui::Color selected,
+                        sdlgui::Color selectedBar,
                         sdlgui::Color selectedText, sdlgui::Color border,
                         sdlgui::Color scrollTrack, sdlgui::Color scrollThumb);
 
@@ -68,6 +69,7 @@ private:
     sdlgui::Color mutedColor_{ 145, 148, 155, 255 };
     sdlgui::Color hoverColor_{ 40, 43, 50, 255 };
     sdlgui::Color selectedColor_{ 46, 76, 122, 255 };
+    sdlgui::Color selectedBarColor_{ 88, 150, 230, 255 };
     sdlgui::Color selectedTextColor_{ 255, 255, 255, 255 };
     sdlgui::Color borderColor_{ 55, 57, 64, 255 };
     sdlgui::Color scrollTrack_{ 30, 31, 35, 255 };
