@@ -2,6 +2,8 @@
 
 #include "ui_widgets.hpp"
 
+#include "icon_bar_data.inc"
+
 #include <algorithm>
 
 namespace sdlagent::ui
@@ -123,6 +125,81 @@ ChatView::ChatView(sg::Widget* parent)
         if (baseDown)
             baseDown(e);
     };
+}
+
+ChatView::~ChatView()
+{
+    if (barTexture_)
+        SDL_DestroyTexture(barTexture_);
+}
+
+void ChatView::setEmptyState(const std::string& text)
+{
+    if (emptyText_ == text)
+        return;
+    emptyText_ = text;
+    markDirty();
+}
+
+void ChatView::setEmptyStateColor(sg::Color color)
+{
+    emptyColor_ = color;
+    markDirty();
+}
+
+void ChatView::onRender(SDL_Renderer* renderer)
+{
+    sg::RichTextView::onRender(renderer);
+
+    if (emptyText_.empty() || !blocks().empty())
+        return;
+
+    if (!barTexture_)
+    {
+        SDL_IOStream* io =
+            SDL_IOFromConstMem(icon::kBarPng, icon::kBarPngSize);
+        SDL_Surface* surface = io ? SDL_LoadPNG_IO(io, true) : nullptr;
+        if (!surface)
+            return;
+        barTexture_ = SDL_CreateTextureFromSurface(renderer, surface);
+        barW_ = surface->w;
+        barH_ = surface->h;
+        SDL_DestroySurface(surface);
+        if (!barTexture_)
+            return;
+    }
+
+    sg::Rect r = absoluteRect();
+    if (r.w <= 0 || r.h <= 0 || barW_ <= 0 || barH_ <= 0)
+        return;
+
+    //Scale with the view: at most 58% wide and 30% tall.
+    float imgW = (float)barW_;
+    float imgH = (float)barH_;
+    float maxW = r.w * 0.58f;
+    float maxH = r.h * 0.30f;
+    float scale = std::min(maxW / imgW, maxH / imgH);
+    if (scale < 1.0f)
+    {
+        imgW *= scale;
+        imgH *= scale;
+    }
+
+    int lineH = sg::currentFont() ? sg::currentFont()->lineHeight() : 16;
+    float gap = std::max(12.0f, r.h * 0.03f);
+    float groupH = imgH + gap + lineH;
+
+    //Centered horizontally, slightly above the vertical center.
+    float top = r.y + (r.h - groupH) * 0.5f - r.h * 0.07f;
+
+    SDL_FRect dst = { r.x + (r.w - imgW) * 0.5f, top, imgW, imgH };
+    SDL_RenderTexture(renderer, barTexture_, nullptr, &dst);
+
+    int tw = textWidth(emptyText_);
+    int tx = r.x + (r.w - tw) / 2;
+    int ty = (int)(top + imgH + gap);
+    drawClipped(renderer, emptyText_, tx, ty, std::max(0, r.w - 32),
+                emptyColor_);
 }
 
 bool ChatView::nearBottom(int slack) const

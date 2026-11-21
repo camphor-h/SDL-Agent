@@ -500,30 +500,6 @@ void ChatPanel::setImageInputSupported(bool supported)
     }
 }
 
-void ChatPanel::buildWelcome(std::vector<sg::RichTextBlock>& blocks) const
-{
-    sg::RichTextBlock title;
-    title.type = sg::RichBlockType::Paragraph;
-    title.marginTop = 22;
-    title.marginBottom = 8;
-
-    sg::RichTextRun run;
-    run.text = tr().emptyChatTitle;
-    run.style.color = accentColor_;
-    run.style.font = boldFont();
-    title.runs.push_back(std::move(run));
-    blocks.push_back(std::move(title));
-
-    sg::RichTextBlock hint;
-    hint.type = sg::RichBlockType::Paragraph;
-
-    sg::RichTextRun hintRun;
-    hintRun.text = tr().emptyChatHint;
-    hintRun.style.color = mutedColor_;
-    hint.runs.push_back(std::move(hintRun));
-    blocks.push_back(std::move(hint));
-}
-
 void ChatPanel::setSession(Session* session)
 {
     if (session != session_)
@@ -733,6 +709,7 @@ void ChatPanel::refresh(bool forceBottom)
 
     if (!session_)
     {
+        view_->setEmptyState("");
         view_->clear();
         return;
     }
@@ -742,10 +719,11 @@ void ChatPanel::refresh(bool forceBottom)
     std::vector<sg::RichTextBlock> blocks;
     if (session_->messages.empty())
     {
-        buildWelcome(blocks);
+        view_->setEmptyState(tr().emptyChatTitle);
     }
     else
     {
+        view_->setEmptyState("");
         const auto& msgs = session_->messages;
         for (std::size_t i = 0; i < msgs.size(); ++i)
         {
@@ -886,6 +864,7 @@ void ChatPanel::applyTheme(const sg::Theme& theme)
     if (view_)
     {
         view_->setDefaultTextColor(theme.text);
+        view_->setEmptyStateColor(theme.menuAccent);
         view_->setLinkColor(theme.menuAccent);
         view_->setCodeBackground(theme.panelBg);
         view_->setCodeBorder(theme.panelBorder);

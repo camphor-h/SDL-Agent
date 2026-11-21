@@ -62,10 +62,25 @@ class ChatView : public sdlgui::RichTextView
 {
 public:
     explicit ChatView(sdlgui::Widget* parent = nullptr);
+    ~ChatView() override;
 
     bool nearBottom(int slack = 56) const;
     void scrollToBottom();
     int  contentHeight() const { return contentH_; }
+
+    //Centered empty-state artwork + caption, drawn when no blocks exist.
+    //Pass an empty text to hide it.
+    void setEmptyState(const std::string& text);
+    void setEmptyStateColor(sdlgui::Color color);
+
+    void onRender(SDL_Renderer* renderer) override;
+
+private:
+    std::string  emptyText_;
+    sdlgui::Color emptyColor_{ 50, 110, 190, 255 };
+    SDL_Texture* barTexture_ = nullptr;
+    int          barW_ = 0;
+    int          barH_ = 0;
 };
 
 //Simple horizontal progress bar (0..1).

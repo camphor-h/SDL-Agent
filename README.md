@@ -1,3 +1,5 @@
+![SDL Agent](assets/icon/icon_bar.png)
+
 # SDL Agent
 
 一个基于 SDL3 / SDLGui / libllmapi 的本地 AI Agent 客户端，支持多会话、流式回复、Markdown 渲染、工具调用和多套 API 配置。

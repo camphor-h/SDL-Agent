@@ -63,6 +63,8 @@ PROMPT_INC   := build/default_prompts.inc
 ICON_DIR := assets/icon
 ICON_PNG := $(ICON_DIR)/icon.png
 ICON_INC := build/icon_data.inc
+ICON_BAR_PNG := $(ICON_DIR)/icon_bar.png
+ICON_BAR_INC := build/icon_bar_data.inc
 CA_BUNDLE := assets/ca-bundle.crt
 CA_INC := build/ca_data.inc
 
@@ -127,6 +129,7 @@ build/%.o: src/%.cc
 build/prompt.o: $(PROMPT_INC)
 
 build/app.o: $(ICON_INC)
+build/ui_widgets.o: $(ICON_BAR_INC)
 build/ca_bundle.o: $(CA_INC)
 
 $(EMBED_TOOL): tools/embed_prompts.cc
@@ -139,6 +142,9 @@ $(EMBED_BIN_TOOL): tools/embed_binary.cc
 
 $(ICON_INC): $(EMBED_BIN_TOOL) $(ICON_PNG)
 	$(EMBED_BIN_TOOL) $@ icon kPng=$(ICON_PNG)
+
+$(ICON_BAR_INC): $(EMBED_BIN_TOOL) $(ICON_BAR_PNG)
+	$(EMBED_BIN_TOOL) $@ icon kBarPng=$(ICON_BAR_PNG)
 
 $(CA_INC): $(EMBED_BIN_TOOL) $(CA_BUNDLE)
 	$(EMBED_BIN_TOOL) $@ ca kCa=$(CA_BUNDLE)

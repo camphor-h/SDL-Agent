@@ -66,7 +66,6 @@ public:
     std::function<void(ConfirmChoice)>      onConfirmation;
 
 private:
-    void buildWelcome(std::vector<sdlgui::RichTextBlock>& blocks) const;
     void buildConfirmation(std::vector<sdlgui::RichTextBlock>& blocks) const;
 
     void openFileDialog();
