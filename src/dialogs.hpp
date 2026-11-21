@@ -351,6 +351,7 @@ public:
     bool isOpen() const;
     void applyTheme(const sdlgui::Theme& theme);
     void poll();
+    void setOnCompleted(std::function<void()> onCompleted);
 
 private:
     void start();
@@ -383,6 +384,7 @@ private:
     bool               running_ = false;
 
     std::function<void()> onClosed_;
+    std::function<void()> onCompleted_;
 
     sdlgui::Color textColor_{ 226, 228, 233, 255 };
     sdlgui::Color mutedColor_{ 150, 153, 160, 255 };

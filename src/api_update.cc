@@ -77,6 +77,12 @@ bool validateJsonFile(const std::filesystem::path& path, std::string& err)
     return true;
 }
 
+void discardTemp(const std::filesystem::path& temp)
+{
+    std::error_code ec;
+    std::filesystem::remove(temp, ec);
+}
+
 } //namespace
 
 Result download(const Request& request, std::atomic<int>& percent,
@@ -95,6 +101,7 @@ Result download(const Request& request, std::atomic<int>& percent,
     std::ofstream out(temp, std::ios::binary | std::ios::trunc);
     if (!out)
     {
+        discardTemp(temp);
         result.error = "无法创建下载文件：" + paths::toUtf8(temp);
         return result;
     }
@@ -102,6 +109,8 @@ Result download(const Request& request, std::atomic<int>& percent,
     CURL* curl = curl_easy_init();
     if (!curl)
     {
+        out.close();
+        discardTemp(temp);
         result.error = "无法初始化 libcurl。";
         return result;
     }
@@ -140,27 +149,21 @@ Result download(const Request& request, std::atomic<int>& percent,
     {
         result.cancelled = true;
         result.error = "下载已取消。";
-        std::error_code existsEc;
-        if (std::filesystem::exists(temp, existsEc) && !existsEc)
-            result.savedPath = temp;
+        discardTemp(temp);
         return result;
     }
 
     if (code != CURLE_OK)
     {
         result.error = curl_easy_strerror(code);
-        std::error_code existsEc;
-        if (std::filesystem::exists(temp, existsEc) && !existsEc)
-            result.savedPath = temp;
+        discardTemp(temp);
         return result;
     }
 
     if (httpCode < 200 || httpCode >= 300)
     {
         result.error = "服务器返回 HTTP " + std::to_string(httpCode);
-        std::error_code existsEc;
-        if (std::filesystem::exists(temp, existsEc) && !existsEc)
-            result.savedPath = temp;
+        discardTemp(temp);
         return result;
     }
 
@@ -168,9 +171,7 @@ Result download(const Request& request, std::atomic<int>& percent,
     if (!validateJsonFile(temp, jsonErr))
     {
         result.error = jsonErr;
-        std::error_code existsEc;
-        if (std::filesystem::exists(temp, existsEc) && !existsEc)
-            result.savedPath = temp;
+        discardTemp(temp);
         return result;
     }
 
@@ -186,7 +187,7 @@ Result download(const Request& request, std::atomic<int>& percent,
         if (ec)
         {
             result.error = "无法备份旧 api.json：" + ec.message();
-            result.savedPath = temp;
+            discardTemp(temp);
             return result;
         }
     }
@@ -200,7 +201,7 @@ Result download(const Request& request, std::atomic<int>& percent,
             std::filesystem::rename(backup, request.target, restoreEc);
         }
         result.error = "无法替换 api.json：" + ec.message();
-        result.savedPath = temp;
+        discardTemp(temp);
         return result;
     }
 

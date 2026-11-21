@@ -284,7 +284,7 @@ App::App(bool openSettingsOnStart, std::string initialSessionId)
         else if (titleEventType_ && ev.type == titleEventType_)
             processTitleResults();
         else if (logEventType_ && ev.type == logEventType_ &&
-                 settingsDialog_ && settingsDialog_->isOpen())
+                 settingsDialog_)
             settingsDialog_->poll();
     };
     if (logEventType_)
@@ -1127,6 +1127,7 @@ void App::sendMessage(const std::string& text)
     updateTopbar();
 
     runningId_ = s->id;
+    log::writef("request: model=%s", config_.model.c_str());
     engine_.start(s->id, s->messages, makeRunConfig(s->id));
     setBusyUi(true);
     lastRefresh_ = std::chrono::steady_clock::now();
@@ -1265,6 +1266,10 @@ void App::handleAgentEvent(const AgentEvent& ev, bool& refresh, bool& force)
                 copy.streaming = false;
                 s->messages.push_back(std::move(copy));
             }
+            log::writef("assistant done: content=%zu reasoning=%zu tools=%s",
+                        ev.message.content.size(),
+                        ev.message.reasoning.size(),
+                        ev.message.toolCalls.empty() ? "no" : "yes");
             s->updatedAt = nowMs();
             saveSession();
             refresh = true;
@@ -1614,7 +1619,8 @@ bool App::saveConfigFromDialog(const Config& cfg, std::string& err)
     if (chat_)
     {
         chat_->setShowReasoning(config_.showReasoning);
-        chat_->setStatus("");
+        if (!engine_.busy())
+            chat_->setStatus("");
         bool foundModel = false;
         bool imageSupport = catalog::supportsImage(config_.model, &foundModel);
         chat_->setImageInputSupported(!foundModel || imageSupport);

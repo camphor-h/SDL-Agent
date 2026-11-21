@@ -219,6 +219,11 @@ void SettingsDialog::build(sg::Widget* root)
             if (auto* app = sg::Application::instance())
                 app->setFocus(profileList_);
         });
+    apiUpdateDialog_->setOnCompleted([this]
+    {
+        if (catalogDialog_ && catalogDialog_->isOpen())
+            catalogDialog_->refresh();
+    });
 
     title_ = addLabel(panel_, 24, 16, 520,
                       std::string(tr().settingsTitle) + " · " + kAppVersion,
@@ -269,15 +274,24 @@ void SettingsDialog::build(sg::Widget* root)
         if (index < 0 || index >= (int)profiles_.size())
             return;
 
-        if (index == lastClickedProfile_)
-        {
-            editProfile(index);
-            return;
-        }
-
         lastClickedProfile_ = index;
         activeProfileId_ = profiles_[index].id;
         rebuildProfileList();
+    };
+
+    //Double-click a profile to open the edit page directly.
+    auto listMouseDown = profileList_->onMouseDown;
+    profileList_->onMouseDown = [this, listMouseDown](sg::MouseEvent& e)
+    {
+        if (listMouseDown)
+            listMouseDown(e);
+
+        if (e.clicks >= 2 && e.x < profileList_->width() - 16)
+        {
+            int index = profileList_->selectedIndex();
+            if (index >= 0 && index < (int)profiles_.size())
+                editProfile(index);
+        }
     };
 
     makePage(formScroll_, formContent_, 360);
@@ -2279,32 +2293,47 @@ ApiUpdateDialog::~ApiUpdateDialog()
     joinWorker();
 }
 
+void ApiUpdateDialog::setOnCompleted(std::function<void()> onCompleted)
+{
+    onCompleted_ = std::move(onCompleted);
+}
+
 void ApiUpdateDialog::open()
 {
-    cancel_.store(true);
-    joinWorker();
-    cancel_.store(false);
-    finished_.store(false);
-    percent_.store(0);
+    if (!running_)
+    {
+        if (worker_.joinable())
+            joinWorker();
+        if (finished_.load())
+            poll();
 
-    url_->setText("https://models.dev/api.json");
-    proxy_->setChecked(false);
-    port_->setText("");
-    progress_->setValue(0.0f);
-    progress_->setVisible(false);
-    status_->setText("");
-    status_->setVisible(false);
-    error_->setText("");
-    setRunning(false);
-    updateProxyRow();
+        cancel_.store(false);
+        finished_.store(false);
+        percent_.store(0);
+
+        url_->setText("https://models.dev/api.json");
+        proxy_->setChecked(false);
+        port_->setText("");
+        progress_->setValue(0.0f);
+        progress_->setVisible(false);
+        status_->setText("");
+        status_->setVisible(false);
+        error_->setText("");
+        setRunning(false);
+        updateProxyRow();
+    }
 
     modal_->showModal();
 }
 
 void ApiUpdateDialog::close()
 {
-    cancel_.store(true);
-    joinWorker();
+    //Closing the window while a download is running keeps the worker alive.
+    if (!running_)
+    {
+        cancel_.store(true);
+        joinWorker();
+    }
 
     if (!modal_->isOpen())
         return;
@@ -2397,7 +2426,7 @@ void ApiUpdateDialog::joinWorker()
 
 void ApiUpdateDialog::poll()
 {
-    if (!modal_ || !modal_->isOpen())
+    if (!modal_)
         return;
 
     updateProxyRow();
@@ -2442,6 +2471,8 @@ void ApiUpdateDialog::poll()
 
         if (panel_ && panel_->getWindow())
             panel_->getWindow()->requestRedraw();
+        if (onCompleted_)
+            onCompleted_();
     }
 }
 
