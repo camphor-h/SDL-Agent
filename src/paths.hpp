@@ -24,6 +24,7 @@ const std::filesystem::path& toolPromptFile();
 const std::filesystem::path& titlePromptFile();
 const std::filesystem::path& apiCatalogFile();
 const std::filesystem::path& attachmentsConfigFile();
+const std::filesystem::path& gatewaysFile();
 const std::filesystem::path& defaultWorkspace();
 
 //UTF-8 <-> filesystem::path (Windows uses UTF-16 internally)

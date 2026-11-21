@@ -2,9 +2,12 @@
 
 #pragma once
 
+#include "http_header.hpp"
 #include "llmapi.h"
 
 #include <atomic>
+#include <string>
+#include <vector>
 
 namespace sdlagent
 {
@@ -13,6 +16,9 @@ namespace sdlagent
 struct TransportState
 {
     std::atomic<bool>* cancel = nullptr;
+    //Stable conversation ID and per-provider headers.
+    std::string sessionId;
+    std::vector<HttpHeader> headers;
 };
 
 //libcurl based transport for libllmapi. Streaming responses are forwarded to

@@ -13,6 +13,7 @@
 #include "model_catalog.hpp"
 #include "paths.hpp"
 #include "prompt.hpp"
+#include "provider_presets.hpp"
 #include "session_list.hpp"
 #include "title_gen.hpp"
 #include "ui_widgets.hpp"
@@ -988,12 +989,14 @@ void App::deleteSession(const std::string& id)
     refreshSidebar();
 }
 
-AgentRunConfig App::makeRunConfig() const
+AgentRunConfig App::makeRunConfig(const std::string& sessionId) const
 {
     AgentRunConfig rc;
     rc.baseUrl = config_.baseUrl;
     rc.apiKey = config_.apiKey;
     rc.model = config_.model;
+    rc.headers = provider::headersFor(config_.baseUrl, config_.model,
+                                      sessionId);
     rc.temperature = config_.temperature;
     rc.maxTokens = config_.maxTokens;
     rc.workspace = paths::defaultWorkspace();
@@ -1124,7 +1127,7 @@ void App::sendMessage(const std::string& text)
     updateTopbar();
 
     runningId_ = s->id;
-    engine_.start(s->id, s->messages, makeRunConfig());
+    engine_.start(s->id, s->messages, makeRunConfig(s->id));
     setBusyUi(true);
     lastRefresh_ = std::chrono::steady_clock::now();
     if (chat_)
@@ -1394,6 +1397,9 @@ void App::maybeStartTitleJob(Session& s)
     job.request.baseUrl = config_.baseUrl;
     job.request.apiKey = config_.apiKey;
     job.request.model = config_.model;
+    job.request.sessionId = s.id;
+    job.request.headers = provider::headersFor(config_.baseUrl,
+                                               config_.model, s.id);
     job.request.prompt = prompt::readFile(paths::titlePromptFile(),
                                           prompt::defaultTitlePrompt());
     job.request.userText = std::move(userText);
@@ -1566,7 +1572,7 @@ bool App::saveConfigFromDialog(const Config& cfg, std::string& err)
 
         for (const char* name :
              { "sys_prompt.md", "tool_prompt.md", "title_prompt.md",
-               "api.json", "attachments.json" })
+               "api.json", "attachments.json", "gateways.json" })
         {
             std::filesystem::path src = oldData / name;
             std::filesystem::path dst = dataTarget / name;

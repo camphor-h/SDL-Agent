@@ -2,8 +2,10 @@
 
 #include "api_update.hpp"
 
+#include "ca_bundle.hpp"
 #include "json.hpp"
 #include "paths.hpp"
+#include "version.hpp"
 
 #include <curl/curl.h>
 
@@ -106,6 +108,7 @@ Result download(const Request& request, std::atomic<int>& percent,
 
     ProgressCtx ctx{ &percent, &cancel };
     curl_easy_setopt(curl, CURLOPT_URL, request.url.c_str());
+    ca::apply(curl);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15L);
@@ -116,7 +119,8 @@ Result download(const Request& request, std::atomic<int>& percent,
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
     curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, &progressCallback);
     curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &ctx);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "SDLAgent/api-updater");
+    std::string userAgent = std::string("SDLAgent/") + kAppVersion;
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, userAgent.c_str());
 
     std::string proxy;
     if (request.proxyPort > 0)

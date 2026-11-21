@@ -292,6 +292,7 @@ public:
     void close();
     bool isOpen() const;
     void applyTheme(const sdlgui::Theme& theme);
+    void refresh();
 
 private:
     void reload(bool force);
@@ -299,6 +300,7 @@ private:
     void rebuildModels();
     void updateDetails();
     void accept();
+    void setMissingView(bool missing);
 
     Modal*  modal_ = nullptr;
     Panel*  panel_ = nullptr;
@@ -315,6 +317,9 @@ private:
     sdlgui::Button*  updateApi_ = nullptr;
     sdlgui::Button*  cancel_ = nullptr;
     sdlgui::Button*  ok_ = nullptr;
+    sdlgui::Label*   missingText_ = nullptr;
+    sdlgui::Button*  missingFetch_ = nullptr;
+    bool             missingMode_ = false;
 
     std::vector<int> providerRows_;
     std::vector<int> modelRows_;

@@ -109,8 +109,8 @@ ChatPanel::ChatPanel(sg::Widget* parent)
     alive_ = std::make_shared<std::atomic<bool>>(true);
 
     setOrientation(sg::SplitView::Orientation::Stacked);
-    setSplit(0.82f);
-    setMinPaneSize(96);
+    setSplit(0.78f);
+    setMinPaneSize(120);
     setDividerWidth(6);
 
     view_ = addChild<ChatView>();
@@ -219,7 +219,7 @@ ChatPanel::ChatPanel(sg::Widget* parent)
     input_->pos(8, 8)->sz(400, 80);
     input_->setAnchors(sg::AnchorLeft | sg::AnchorTop | sg::AnchorRight |
                            sg::AnchorBottom,
-                       8, 8, 8, 46);
+                       8, 8, 8, 40);
     input_->setWordWrap(true);
     input_->setLineSpacing(2);
     input_->scrollbarH(false);
@@ -425,7 +425,7 @@ void ChatPanel::updateComposerLayout()
     int top = pending_.empty() ? 8 : 40;
     input_->setAnchors(sg::AnchorLeft | sg::AnchorTop | sg::AnchorRight |
                            sg::AnchorBottom,
-                       8, top, 8, 46);
+                       8, top, 8, 40);
     if (getWindow())
         getWindow()->requestRedraw();
 }

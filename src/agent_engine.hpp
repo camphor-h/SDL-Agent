@@ -3,6 +3,7 @@
 #pragma once
 
 #include "config.hpp"
+#include "http_header.hpp"
 #include "session.hpp"
 #include "tools.hpp"
 
@@ -35,6 +36,7 @@ struct AgentRunConfig
     //Sessions root used to resolve attachment paths.
     std::filesystem::path sessionsRoot;
     bool        imageInput = false;
+    std::vector<HttpHeader> headers;
     ToolMode    toolMode = ToolMode::Ask;
 };
 

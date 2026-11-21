@@ -2,6 +2,9 @@
 
 #include "http_transport.hpp"
 
+#include "ca_bundle.hpp"
+#include "version.hpp"
+
 #include <curl/curl.h>
 
 #include <cstring>
@@ -96,6 +99,15 @@ int CurlTransport::perform(void* userdata,
             headers = curl_slist_append(headers, *h);
     }
 
+    if (state)
+    {
+        for (const HttpHeader& header : state->headers)
+        {
+            std::string line = header.name + ": " + header.value;
+            headers = curl_slist_append(headers, line.c_str());
+        }
+    }
+
     WriteCtx write;
     write.onChunk = onChunk;
     write.userdata = chunkUserdata;
@@ -105,6 +117,7 @@ int CurlTransport::perform(void* userdata,
     errbuf[0] = '\0';
 
     curl_easy_setopt(curl, CURLOPT_URL, request->url);
+    ca::apply(curl);
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, (const char*)request->body);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE,
@@ -119,7 +132,8 @@ int CurlTransport::perform(void* userdata,
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "sdlagent/0.1");
+    std::string userAgent = std::string("SDLAgent/") + kAppVersion;
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, userAgent.c_str());
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 30000L);
     curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
     curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 180L);

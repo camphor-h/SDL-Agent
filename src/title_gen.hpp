@@ -2,8 +2,11 @@
 
 #pragma once
 
+#include "http_header.hpp"
+
 #include <atomic>
 #include <string>
+#include <vector>
 
 namespace sdlagent::titlegen
 {
@@ -16,6 +19,8 @@ struct Request
     std::string prompt;
     std::string userText;
     std::string assistantText;
+    std::string sessionId;
+    std::vector<HttpHeader> headers;
 };
 
 //Generates a short conversation title with a separate non-streaming request.

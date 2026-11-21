@@ -63,6 +63,8 @@ PROMPT_INC   := build/default_prompts.inc
 ICON_DIR := assets/icon
 ICON_PNG := $(ICON_DIR)/icon.png
 ICON_INC := build/icon_data.inc
+CA_BUNDLE := assets/ca-bundle.crt
+CA_INC := build/ca_data.inc
 
 CXXFLAGS += $(INCLUDES) $(PKG_CFLAGS)
 CFLAGS   += -Ithird_party/libllmapi $(CJSON_CFLAGS)
@@ -125,6 +127,7 @@ build/%.o: src/%.cc
 build/prompt.o: $(PROMPT_INC)
 
 build/app.o: $(ICON_INC)
+build/ca_bundle.o: $(CA_INC)
 
 $(EMBED_TOOL): tools/embed_prompts.cc
 	@mkdir -p build
@@ -135,7 +138,10 @@ $(EMBED_BIN_TOOL): tools/embed_binary.cc
 	$(CXX) -std=c++20 -O2 $< -o $@
 
 $(ICON_INC): $(EMBED_BIN_TOOL) $(ICON_PNG)
-	$(EMBED_BIN_TOOL) $@ kPng=$(ICON_PNG)
+	$(EMBED_BIN_TOOL) $@ icon kPng=$(ICON_PNG)
+
+$(CA_INC): $(EMBED_BIN_TOOL) $(CA_BUNDLE)
+	$(EMBED_BIN_TOOL) $@ ca kCa=$(CA_BUNDLE)
 
 ifeq ($(OS),Windows_NT)
 $(RES_OBJ): $(ICON_DIR)/app.rc $(ICON_DIR)/icon.ico

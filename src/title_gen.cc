@@ -113,6 +113,8 @@ std::string generate(const Request& request, std::atomic<bool>* cancel,
 
     TransportState state;
     state.cancel = cancel;
+    state.sessionId = request.sessionId;
+    state.headers = request.headers;
 
     LlmmapiTransport transport;
     std::memset(&transport, 0, sizeof(transport));

@@ -214,6 +214,8 @@ void SettingsDialog::build(sg::Widget* root)
         root, window_,
         [this]
         {
+            if (catalogDialog_ && catalogDialog_->isOpen())
+                catalogDialog_->refresh();
             if (auto* app = sg::Application::instance())
                 app->setFocus(profileList_);
         });
@@ -1089,7 +1091,8 @@ void SettingsDialog::open(const Config& cfg)
     about += "工具提示词: " + paths::toUtf8(paths::toolPromptFile()) + "\n";
     about += "标题提示词: " + paths::toUtf8(paths::titlePromptFile()) + "\n";
     about += "附件类型: " + paths::toUtf8(paths::attachmentsConfigFile()) +
-             "\n\n";
+             "\n";
+    about += "网关请求头: " + paths::toUtf8(paths::gatewaysFile()) + "\n\n";
     about += "依赖: SDL3, SDLGui, libllmapi, md4c, cJSON, libcurl, SDL3_ttf\n";
     about += "许可证: GPL-3.0-only（本程序）；第三方库各自遵循其许可证";
     aboutText_->setText(about);
@@ -1900,6 +1903,20 @@ ModelCatalogDialog::ModelCatalogDialog(sg::Widget* root,
     ok_->setText(tr().ok);
     ok_->onClick = [this](sg::MouseEvent&) { accept(); };
 
+    missingText_ = addLabel(panel_, 60, 140, 780, "", textColor_);
+    missingText_->setWordWrap(true);
+    missingText_->setSize(780, 120);
+
+    missingFetch_ = panel_->addChild<sg::Button>();
+    missingFetch_->pos(60, 280)->sz(200, 38);
+    missingFetch_->setText(tr().fetchApiJson);
+    missingFetch_->onClick = [this](sg::MouseEvent&)
+    {
+        if (onUpdateApi_)
+            onUpdateApi_();
+    };
+
+    setMissingView(false);
     modal_->hideModal();
 }
 
@@ -1944,17 +1961,47 @@ void ModelCatalogDialog::reload(bool force)
         modelRows_.clear();
         providerList_->clear();
         modelList_->clear();
-        source_->setText(ellipsize(std::string(tr().catalogSource) + ": " +
-                                       paths::toUtf8(cat_->path),
-                                   660));
-        details_->setText(cat_->error);
+        setMissingView(true);
+        missingText_->setText(
+            std::string(tr().apiJsonMissing) + "\n" +
+            tr().apiJsonMissingHint + "\n\n" + cat_->error + "\n" +
+            paths::toUtf8(cat_->path));
         return;
     }
+
+    setMissingView(false);
 
     source_->setText(ellipsize(std::string(tr().catalogSource) + ": " +
                                    paths::toUtf8(cat_->path),
                                660));
     rebuildProviders();
+}
+
+void ModelCatalogDialog::refresh()
+{
+    if (modal_ && modal_->isOpen())
+        reload(true);
+}
+
+void ModelCatalogDialog::setMissingView(bool missing)
+{
+    missingMode_ = missing;
+
+    if (providerLabel_) providerLabel_->setVisible(!missing);
+    if (providerSearch_) providerSearch_->setVisible(!missing);
+    if (providerList_) providerList_->setVisible(!missing);
+    if (modelLabel_) modelLabel_->setVisible(!missing);
+    if (modelSearch_) modelSearch_->setVisible(!missing);
+    if (modelList_) modelList_->setVisible(!missing);
+    if (details_) details_->setVisible(!missing);
+    if (source_) source_->setVisible(!missing);
+    if (reload_) reload_->setVisible(!missing);
+    if (updateApi_) updateApi_->setVisible(!missing);
+    if (ok_) ok_->setVisible(!missing);
+    if (missingText_) missingText_->setVisible(missing);
+    if (missingFetch_) missingFetch_->setVisible(missing);
+    if (cancel_)
+        cancel_->setText(missing ? tr().back : tr().cancel);
 }
 
 void ModelCatalogDialog::rebuildProviders()
@@ -2110,6 +2157,8 @@ void ModelCatalogDialog::applyTheme(const sg::Theme& theme)
         modelLabel_->setTextColor(theme.mutedText);
     if (details_)
         details_->setTextColor(theme.mutedText);
+    if (missingText_)
+        missingText_->setTextColor(theme.text);
 
     textColor_ = theme.text;
     mutedColor_ = theme.mutedText;

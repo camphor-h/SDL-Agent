@@ -458,6 +458,8 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
 
     TransportState transportState;
     transportState.cancel = &cancel_;
+    transportState.sessionId = sid;
+    transportState.headers = cfg.headers;
 
     LlmmapiTransport transport;
     std::memset(&transport, 0, sizeof(transport));

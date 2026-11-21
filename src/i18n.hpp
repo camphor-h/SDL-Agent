@@ -82,6 +82,9 @@ struct Strings
     const char* logEmpty;
     const char* logExportFailed;
     const char* updateApi;
+    const char* apiJsonMissing;
+    const char* apiJsonMissingHint;
+    const char* fetchApiJson;
     const char* downloadUrl;
     const char* useProxy;
     const char* proxyPort;

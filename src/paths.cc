@@ -23,6 +23,7 @@ std::filesystem::path gToolPrompt;
 std::filesystem::path gTitlePrompt;
 std::filesystem::path gCatalog;
 std::filesystem::path gAttachments;
+std::filesystem::path gGateways;
 std::filesystem::path gWorkspace;
 bool gInit = false;
 
@@ -56,6 +57,7 @@ void ensureInit()
     gTitlePrompt = gData / "title_prompt.md";
     gCatalog = gData / "api.json";
     gAttachments = gData / "attachments.json";
+    gGateways = gData / "gateways.json";
     gWorkspace = std::filesystem::current_path();
 }
 
@@ -99,6 +101,7 @@ void setDataDir(const std::filesystem::path& dir)
     gTitlePrompt = gData / "title_prompt.md";
     gCatalog = gData / "api.json";
     gAttachments = gData / "attachments.json";
+    gGateways = gData / "gateways.json";
 
     std::filesystem::create_directories(gData, ec);
 }
@@ -131,6 +134,12 @@ const std::filesystem::path& attachmentsConfigFile()
 {
     ensureInit();
     return gAttachments;
+}
+
+const std::filesystem::path& gatewaysFile()
+{
+    ensureInit();
+    return gGateways;
 }
 
 const std::filesystem::path& defaultWorkspace()

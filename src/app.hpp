@@ -84,7 +84,7 @@ private:
     void requestDeleteSession(const std::string& id);
     void deleteSession(const std::string& id);
 
-    AgentRunConfig makeRunConfig() const;
+    AgentRunConfig makeRunConfig(const std::string& sessionId) const;
     std::string    effectiveWorkspace() const;
 
     sdlgui::Application gui_;
