@@ -201,6 +201,11 @@ void SettingsDialog::build(sg::Widget* root)
         root,
         [this]
         {
+            if (apiUpdateDialog_)
+                apiUpdateDialog_->open();
+        },
+        [this]
+        {
             if (auto* app = sg::Application::instance())
                 app->setFocus(catalogButton_);
         });
@@ -256,17 +261,7 @@ void SettingsDialog::build(sg::Widget* root)
     profileList_->pos(0, 0)->sz(1000, 400);
     profileList_->setAnchors(sg::AnchorLeft | sg::AnchorTop |
                                  sg::AnchorRight | sg::AnchorBottom,
-                             0, 40, 0, 0);
-
-    updateApi_ = configListPage_->addChild<sg::Button>();
-    updateApi_->pos(0, 0)->sz(180, 30);
-    updateApi_->setAnchors(sg::AnchorRight | sg::AnchorTop, 0, 0, 0, 0);
-    updateApi_->setText(tr().updateApi);
-    updateApi_->onClick = [this](sg::MouseEvent&)
-    {
-        if (apiUpdateDialog_)
-            apiUpdateDialog_->open();
-    };
+                             0, 0, 0, 0);
     profileList_->onItemSelected = [this](int index)
     {
         if (index < 0 || index >= (int)profiles_.size())
@@ -735,7 +730,6 @@ void SettingsDialog::selectPage(int index)
 
     if (newProfile_) newProfile_->setVisible(page_ == 0);
     if (deleteProfile_) deleteProfile_->setVisible(page_ == 0);
-    if (updateApi_) updateApi_->setVisible(page_ == 0);
     if (saveProfile_) saveProfile_->setVisible(page_ == 4);
 
     if (page_ == 5)
@@ -1815,8 +1809,10 @@ std::string priceText(double v)
 } //namespace
 
 ModelCatalogDialog::ModelCatalogDialog(sg::Widget* root,
+                                       std::function<void()> onUpdateApi,
                                        std::function<void()> onClosed)
-    : onClosed_(std::move(onClosed))
+    : onUpdateApi_(std::move(onUpdateApi))
+    , onClosed_(std::move(onClosed))
 {
     modal_ = root->addChild<Modal>();
     modal_->pos(0, 0)->sz(root->width(), root->height());
@@ -1885,10 +1881,14 @@ ModelCatalogDialog::ModelCatalogDialog(sg::Widget* root,
     details_->setWordWrap(true);
     details_->setTextColor(sg::Color(150, 153, 160));
 
-    custom_ = panel_->addChild<sg::Button>();
-    custom_->pos(16, 580)->sz(110, 32);
-    custom_->setText(tr().catalogCustom);
-    custom_->onClick = [this](sg::MouseEvent&) { close(); };
+    updateApi_ = panel_->addChild<sg::Button>();
+    updateApi_->pos(16, 580)->sz(150, 32);
+    updateApi_->setText(tr().updateApi);
+    updateApi_->onClick = [this](sg::MouseEvent&)
+    {
+        if (onUpdateApi_)
+            onUpdateApi_();
+    };
 
     cancel_ = panel_->addChild<sg::Button>();
     cancel_->pos(680, 580)->sz(92, 32);

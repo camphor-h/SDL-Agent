@@ -103,7 +103,6 @@ private:
     sdlgui::ListBox*  profileList_ = nullptr;
     sdlgui::Button*   newProfile_ = nullptr;
     sdlgui::Button*   deleteProfile_ = nullptr;
-    sdlgui::Button*   updateApi_ = nullptr;
     sdlgui::Button*   saveProfile_ = nullptr;
     std::vector<ApiProfile> profiles_;
     std::string       activeProfileId_;
@@ -286,6 +285,7 @@ public:
                                        const catalog::Model&)>;
 
     explicit ModelCatalogDialog(sdlgui::Widget* root,
+                                std::function<void()> onUpdateApi = {},
                                 std::function<void()> onClosed = {});
 
     void open(ApplyFn onApply);
@@ -312,7 +312,7 @@ private:
     sdlgui::ListBox* providerList_ = nullptr;
     sdlgui::ListBox* modelList_ = nullptr;
     sdlgui::Label*   details_ = nullptr;
-    sdlgui::Button*  custom_ = nullptr;
+    sdlgui::Button*  updateApi_ = nullptr;
     sdlgui::Button*  cancel_ = nullptr;
     sdlgui::Button*  ok_ = nullptr;
 
@@ -325,6 +325,7 @@ private:
     const catalog::Catalog* cat_ = nullptr;
 
     ApplyFn onApply_;
+    std::function<void()> onUpdateApi_;
     std::function<void()> onClosed_;
 
     sdlgui::Color textColor_{ 226, 228, 233, 255 };
