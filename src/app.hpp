@@ -49,6 +49,7 @@ private:
     void buildDialogs();
     void applyTheme();
     void applyTheme(const std::string& themeName);
+    void layoutTopbar();
     void updateTopbar();
 
     void refreshSidebar();

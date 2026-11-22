@@ -683,7 +683,51 @@ void App::applyTheme(const std::string& themeName)
     if (confirmDialog_)
         confirmDialog_->applyTheme(theme);
 
+    layoutTopbar();
+
     win_->requestRedraw();
+}
+
+void App::layoutTopbar()
+{
+    if (!contentTopbar_ || !chat_)
+        return;
+
+    int lh = sg::currentFont() ? sg::currentFont()->lineHeight() : 18;
+    if (lh < 18)
+        lh = 18;
+
+    int barH = std::max(42, lh + 18);
+    int btnH = std::max(28, lh + 6);
+
+    int barW = contentTopbar_->width();
+    contentTopbar_->setSize(barW, barH);
+
+    if (contentTopbarLine_)
+    {
+        contentTopbarLine_->setPosition(0, barH - 1);
+        contentTopbarLine_->setSize(barW, 1);
+    }
+
+    if (toggleSidebar_)
+    {
+        toggleSidebar_->setPosition(8, (barH - btnH) / 2);
+        toggleSidebar_->setSize(32, btnH);
+    }
+
+    if (titleLabel_)
+    {
+        //Keep the right anchor so window resizes still work.
+        titleLabel_->setAnchors(sg::AnchorLeft | sg::AnchorTop |
+                                    sg::AnchorRight,
+                                50, (barH - lh) / 2, 16, 0);
+        titleLabel_->setSize(std::max(80, barW - 66), lh);
+    }
+
+    chat_->setAnchors(sg::AnchorLeft | sg::AnchorTop | sg::AnchorRight |
+                          sg::AnchorBottom,
+                      0, barH, 0, 0);
+    chat_->setPosition(0, barH);
 }
 
 void App::refreshSidebar()

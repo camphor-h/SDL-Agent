@@ -1,11 +1,11 @@
 package org.libsdl.app;
 
 import android.content.Intent;
-import android.graphics.Rect;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowInsets;
+import android.view.WindowManager;
 
 /**
  * SDL activity with app-specific additions (camera capture results and IME
@@ -18,42 +18,27 @@ public class MainActivity extends SDLActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        //Report the on-screen keyboard height so the native UI can move the
-        //composer above it. WindowInsets is the reliable source on Android 11+;
-        //older releases fall back to comparing the visible frame.
-        View decor = getWindow().getDecorView();
         if (Build.VERSION.SDK_INT >= 30) {
+            //The native layout shrinks itself using the IME inset. Keep
+            //Android from panning or resizing the window too, otherwise the
+            //composer moves up by roughly two keyboard heights.
+            getWindow().setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+
+            View decor = getWindow().getDecorView();
             decor.setOnApplyWindowInsetsListener((v, insets) -> {
-                reportImeInset(v, insets);
+                reportImeInset(insets);
                 //Return unchanged so SDLSurface still receives its insets.
                 return insets;
             });
-        } else {
-            decor.getViewTreeObserver().addOnGlobalLayoutListener(
-                () -> reportImeInset(decor, null));
+            decor.requestApplyInsets();
         }
-        decor.requestApplyInsets();
+        //API < 30: the manifest's adjustResize shrinks the window and SDL
+        //reflows on the resulting resize event.
     }
 
-    private void reportImeInset(View decor, WindowInsets insets) {
-        int bottom = 0;
-        if (Build.VERSION.SDK_INT >= 30) {
-            if (insets == null) {
-                insets = decor.getRootWindowInsets();
-            }
-            if (insets != null) {
-                bottom = insets.getInsets(WindowInsets.Type.ime()).bottom;
-            }
-        } else {
-            Rect visible = new Rect();
-            decor.getWindowVisibleDisplayFrame(visible);
-            bottom = Math.max(0, decor.getRootView().getHeight() - visible.bottom);
-            //Ignore small differences caused by system bars.
-            if (bottom < decor.getRootView().getHeight() / 6) {
-                bottom = 0;
-            }
-        }
-
+    private void reportImeInset(WindowInsets insets) {
+        int bottom = insets.getInsets(WindowInsets.Type.ime()).bottom;
         if (bottom != lastImeInset) {
             lastImeInset = bottom;
             nativeImeInset(bottom);
