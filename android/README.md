@@ -47,14 +47,22 @@ sdk.dir=<path-to-android-sdk>
 
 ```bash
 cd android
-./gradlew assembleDebug
+./gradlew assembleDebug    # 调试包
+./gradlew assembleRelease  # 签名发布包
 ```
 
 APK：
 
 ```text
 android/app/build/outputs/apk/debug/app-debug.apk
+android/app/build/outputs/apk/release/app-release.apk
 ```
+
+发布包使用 `android/keystore.properties` 指向的签名（该文件和 keystore 目录
+都被 git 忽略）。没有这两项时 `assembleRelease` 会产出未签名 APK。
+
+`assets/api.json` 会在构建时复制进 APK 的 `assets/`。Android 首次启动时，
+如果数据目录里没有 `api.json`，会从 APK 资源中复制一份。
 
 安装（`adb` 在 PATH 里时）：
 

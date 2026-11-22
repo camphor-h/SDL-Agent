@@ -62,6 +62,7 @@ private:
     void cancelRun();
 
     void onAgentEvents();
+    void handleCameraResult();
     void handleAgentEvent(const AgentEvent& ev, bool& refresh, bool& force);
     void setBusyUi(bool busy);
     void showStatus(const std::string& text);
@@ -99,6 +100,7 @@ private:
     uint32_t agentEventType_ = 0;
     uint32_t titleEventType_ = 0;
     uint32_t logEventType_ = 0;
+    uint32_t cameraEventType_ = 0;
     SDL_TimerID logTimer_ = 0;
 
     ui::Panel*       sidebar_ = nullptr;

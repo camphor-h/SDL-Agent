@@ -17,6 +17,10 @@ android/app/.cxx/
 android/.externalNativeBuild/
 android/local.properties
 android/captures/
+android/keystore.properties
+android/keystore/
+*.jks
+*.keystore
 
 # IDE project files
 .idea/

@@ -59,17 +59,20 @@ public:
 
     void applyTheme(const sdlgui::Theme& theme);
 
+    //Stage a file chosen outside the built-in picker (e.g. camera capture).
+    void addPickedFile(const std::string& path, std::string& err);
+
     std::function<void(const std::string&)> onSend;
     std::function<void()>                   onCancel;
     std::function<void()>                   onNewChat;
     std::function<void()>                   onOpenSettings;
+    std::function<void()>                   onCamera;
     std::function<void(ConfirmChoice)>      onConfirmation;
 
 private:
     void buildConfirmation(std::vector<sdlgui::RichTextBlock>& blocks) const;
 
     void openFileDialog();
-    void addPickedFile(const std::string& path, std::string& err);
     void removeAttachment(std::size_t index);
     void rebuildAttachmentRow();
     void updateComposerLayout();
@@ -83,6 +86,7 @@ private:
     GlyphButton*         send_ = nullptr;
     sdlgui::Button*      stop_ = nullptr;
     GlyphButton*         attachButton_ = nullptr;
+    GlyphButton*         cameraButton_ = nullptr;
     sdlgui::Widget*      attachRow_ = nullptr;
     Session*             session_ = nullptr;
     std::filesystem::path sessionsRoot_;

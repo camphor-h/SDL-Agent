@@ -60,4 +60,8 @@ std::vector<std::string> reasoningEfforts(const std::string& modelId,
 //"anthropic", "responses" or "openai".
 std::string protocolFromNpm(const std::string& npm);
 
+//Android: copies the api.json packaged in the APK to the data directory when
+//no local file exists yet.
+void ensureBundled();
+
 } //namespace sdlagent::catalog

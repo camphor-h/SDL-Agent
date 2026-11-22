@@ -5,6 +5,7 @@
 #include "icon_data.inc"
 
 #include "attachments.hpp"
+#include "camera.hpp"
 #include "chat_panel.hpp"
 #include "dialogs.hpp"
 #include "font.hpp"
@@ -276,9 +277,11 @@ App::App(bool openSettingsOnStart, std::string initialSessionId)
             log::writef("%s", fontErr.c_str());
     }
 
-    agentEventType_ = SDL_RegisterEvents(3);
+    agentEventType_ = SDL_RegisterEvents(4);
     titleEventType_ = agentEventType_ ? agentEventType_ + 1 : 0;
     logEventType_ = agentEventType_ ? agentEventType_ + 2 : 0;
+    cameraEventType_ = agentEventType_ ? agentEventType_ + 3 : 0;
+    camera::setEventType(cameraEventType_);
     engine_.setUserEventType(agentEventType_);
     gui_.onUserEvent = [this](const SDL_Event& ev)
     {
@@ -289,6 +292,8 @@ App::App(bool openSettingsOnStart, std::string initialSessionId)
         else if (logEventType_ && ev.type == logEventType_ &&
                  settingsDialog_)
             settingsDialog_->poll();
+        else if (cameraEventType_ && ev.type == cameraEventType_)
+            handleCameraResult();
     };
     if (logEventType_)
         logTimer_ = SDL_AddTimer(200, &App::logTimerProc, this);
@@ -357,6 +362,7 @@ App::App(bool openSettingsOnStart, std::string initialSessionId)
 
     prompt::ensureFiles();
     attachment::ensureConfig();
+    catalog::ensureBundled();
 
     std::string err;
     if (!store_.loadAll(err) && !err.empty())
@@ -557,6 +563,7 @@ void App::buildUi()
     chat_->onCancel = [this] { cancelRun(); };
     chat_->onNewChat = [this] { createSession(); };
     chat_->onOpenSettings = [this] { openSettings(); };
+    chat_->onCamera = [this] { camera::capture(); };
     chat_->onConfirmation = [this](ui::ChatPanel::ConfirmChoice choice)
     {
         if (!engine_.busy())
@@ -1271,6 +1278,27 @@ void App::showStatus(const std::string& text)
         chat_->setStatus(text);
 }
 
+void App::handleCameraResult()
+{
+    std::string path;
+    if (!camera::takeResult(path))
+        return;
+    if (!chat_)
+        return;
+
+    std::string err;
+    chat_->addPickedFile(path, err);
+    if (!err.empty())
+    {
+        if (win_)
+            win_->showMessageBox(tr().attach, err.c_str(),
+                                 sg::MessageBoxType::Warning,
+                                 sg::MessageBoxButtons::OK, nullptr);
+        return;
+    }
+    gui_.setFocus(chat_->inputWidget());
+}
+
 void App::updateUsageUi()
 {
     if (!chat_)
@@ -1726,6 +1754,7 @@ bool App::saveConfigFromDialog(const Config& cfg, std::string& err)
         paths::setDataDir(dataTarget);
         prompt::ensureFiles();
     attachment::ensureConfig();
+        catalog::ensureBundled();
     }
     next.dataDir = paths::toUtf8(dataTarget);
 

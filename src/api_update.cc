@@ -71,7 +71,7 @@ bool validateJsonFile(const std::filesystem::path& path, std::string& err)
     Json j = Json::parse(text);
     if (!j.isObject() || j.size() == 0)
     {
-        err = "下载内容不是有效的 api.json。";
+        err = "下载内容不是有效的 api.json";
         return false;
     }
     return true;

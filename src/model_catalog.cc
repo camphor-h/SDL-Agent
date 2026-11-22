@@ -5,6 +5,8 @@
 #include "paths.hpp"
 #include "util.hpp"
 
+#include <SDL3/SDL.h>
+
 #include <cjson/cJSON.h>
 
 #include <algorithm>
@@ -336,6 +338,35 @@ std::string protocolFromNpm(const std::string& npm)
         npm == "@ai-sdk/xai")
         return "responses";
     return "openai";
+}
+
+void ensureBundled()
+{
+#if defined(__ANDROID__)
+    std::filesystem::path target = paths::apiCatalogFile();
+    std::error_code ec;
+    if (std::filesystem::exists(target, ec) && !ec)
+        return;
+
+    SDL_IOStream* in = SDL_IOFromFile("api.json", "rb");
+    if (!in)
+        return;
+
+    std::string data;
+    char buffer[16384];
+    std::size_t count = 0;
+    while ((count = SDL_ReadIO(in, buffer, sizeof(buffer))) > 0)
+        data.append(buffer, count);
+    SDL_CloseIO(in);
+
+    if (data.empty() || data[0] != '{')
+        return;
+
+    std::ofstream out(target, std::ios::binary | std::ios::trunc);
+    if (!out)
+        return;
+    out.write(data.data(), (std::streamsize)data.size());
+#endif
 }
 
 } //namespace sdlagent::catalog

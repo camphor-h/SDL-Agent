@@ -279,6 +279,20 @@ ChatPanel::ChatPanel(sg::Widget* parent)
     attachButton_->setGlyph(GlyphButton::Glyph::Plus);
     attachButton_->onClick = [this](sg::MouseEvent&) { openFileDialog(); };
 
+    if (paths::isMobile())
+    {
+        cameraButton_ = inputPanel_->addChild<GlyphButton>();
+        cameraButton_->pos(0, 0)->sz(30, 30);
+        cameraButton_->setAnchors(sg::AnchorLeft | sg::AnchorBottom,
+                                  16, 0, 0, 41);
+        cameraButton_->setGlyph(GlyphButton::Glyph::Camera);
+        cameraButton_->onClick = [this](sg::MouseEvent&)
+        {
+            if (onCamera)
+                onCamera();
+        };
+    }
+
     hint_ = inputPanel_->addChild<sg::Label>();
     hint_->pos(14, 18)->sz(420, 18);
     hint_->setAnchors(sg::AnchorLeft | sg::AnchorRight | sg::AnchorBottom,
@@ -828,6 +842,11 @@ void ChatPanel::applyTheme(const sg::Theme& theme)
     if (attachButton_)
     {
         attachButton_->setColors(theme.inputBg, theme.buttonHover,
+                                 theme.buttonPressed, theme.mutedText);
+    }
+    if (cameraButton_)
+    {
+        cameraButton_->setColors(theme.inputBg, theme.buttonHover,
                                  theme.buttonPressed, theme.mutedText);
     }
     if (send_)

@@ -2,6 +2,8 @@
 
 #include "dialogs.hpp"
 
+#include "icon_bar_data.inc"
+
 #include "i18n.hpp"
 #include "font.hpp"
 #include "log.hpp"
@@ -576,10 +578,32 @@ void SettingsDialog::build(sg::Widget* root)
         SDL_OpenURL(fileUrl(paths::titlePromptFile()).c_str());
     };
 
-    //About page
-    aboutText_ = aboutContent_->addChild<sg::Label>();
-    aboutText_->pos(0, 0)->sz(800, 420);
-    aboutText_->setWordWrap(true);
+    //About page: centered artwork, name, version, author and link.
+    aboutImage_ = aboutContent_->addChild<ImageWidget>();
+    aboutImage_->setImage(icon::kBarPng, icon::kBarPngSize);
+
+    aboutTitle_ = addLabel(aboutContent_, 0, 0, 800, "SDL Agent",
+                           sg::Color(226, 228, 233));
+    aboutTitle_->setTextAlign(sg::RichTextAlign::Center);
+
+    aboutVersion_ = addLabel(aboutContent_, 0, 0, 800, kAppVersion,
+                             sg::Color(150, 153, 160));
+    aboutVersion_->setTextAlign(sg::RichTextAlign::Center);
+
+    aboutAuthor_ = addLabel(aboutContent_, 0, 0, 800,
+                            std::string(tr().aboutAuthorPrefix) +
+                                "PolarCamphor",
+                            sg::Color(200, 203, 210));
+    aboutAuthor_->setTextAlign(sg::RichTextAlign::Center);
+
+    aboutLink_ = addLabel(aboutContent_, 0, 0, 800,
+                          "https://github.com/camphor-h/SDL-Agent",
+                          sg::Color(50, 110, 190));
+    aboutLink_->setTextAlign(sg::RichTextAlign::Center);
+    aboutLink_->onClick = [](sg::MouseEvent&)
+    {
+        SDL_OpenURL("https://github.com/camphor-h/SDL-Agent");
+    };
 
     //Log page
     logView_ = panel_->addChild<sg::RichTextView>();
@@ -679,7 +703,20 @@ void SettingsDialog::layoutFields(int panelW, int)
         profileName_->setSize(contentW, 30);
     baseUrl_->setSize(contentW, 30);
     apiKey_->setSize(contentW, 30);
-    model_->setSize(std::min(400, contentW), 30);
+    int modelW = std::min(400, contentW);
+    int catalogW = 220;
+    if (contentW < 560)
+    {
+        catalogW = 72;
+        modelW = std::max(120, contentW - catalogW - 8);
+        if (catalogButton_)
+            catalogButton_->setText(tr().browse);
+    }
+    else if (catalogButton_)
+    {
+        catalogButton_->setText(tr().selectFromCatalog);
+    }
+    model_->setSize(modelW, 30);
 
     if (maxTokensLabel_)
         maxTokensLabel_->setPosition(0, maxTokensLabel_->y());
@@ -696,8 +733,11 @@ void SettingsDialog::layoutFields(int panelW, int)
         maxTokens_->setSize(half, 30);
     }
     if (catalogButton_)
-        catalogButton_->setPosition(std::max(0, contentW - 220),
+    {
+        catalogButton_->setPosition(std::max(0, contentW - catalogW),
                                     catalogButton_->y());
+        catalogButton_->setSize(catalogW, 28);
+    }
 
     if (fontSummary_)
         fontSummary_->setSize(contentW, 18);
@@ -736,8 +776,31 @@ void SettingsDialog::layoutFields(int panelW, int)
     if (editTitle_)
         editTitle_->setPosition(contentW - 140, editTitle_->y());
 
-    if (aboutText_)
-        aboutText_->setSize(contentW, 420);
+    if (aboutImage_)
+    {
+        int imgW = std::min(480, std::max(220, contentW * 6 / 10));
+        int imgH = imgW * 288 / 1440;
+        int y = 12;
+
+        aboutImage_->setPosition((contentW - imgW) / 2, y);
+        aboutImage_->setSize(imgW, imgH);
+        y += imgH + 20;
+
+        auto place = [&](sg::Label* label, int height)
+        {
+            if (!label)
+                return;
+            label->setPosition(0, y);
+            label->setSize(contentW, height);
+            y += height + 8;
+        };
+
+        place(aboutTitle_, 28);
+        place(aboutVersion_, 20);
+        y += 10;
+        place(aboutAuthor_, 22);
+        place(aboutLink_, 22);
+    }
 
     int mx = 40;
     int mw = std::max(200, panelW - 80);
@@ -835,7 +898,7 @@ void SettingsDialog::selectPage(int index)
     if (tabAppearance_) tabAppearance_->setVisible(menu);
     if (tabCustom_) tabCustom_->setVisible(menu);
     if (tabAbout_) tabAbout_->setVisible(menu);
-    if (logButton_) logButton_->setVisible(menu);
+    if (logButton_) logButton_->setVisible(menu && !paths::isMobile());
 
     if (configListPage_) configListPage_->setVisible(page_ == 0);
     if (formScroll_) formScroll_->setVisible(page_ == 4);
@@ -1256,21 +1319,6 @@ void SettingsDialog::open(const Config& cfg)
     fontPointSizeValue_ = cfg.fontPointSize;
     updateFontSummary();
 
-    std::string about;
-    about += std::string("SDL Agent ") + kAppVersion + "\n\n";
-    about += "本地 AI Agent，基于 SDL3、SDLGui 和 libllmapi。\n\n";
-    about += "配置文件: " + paths::toUtf8(paths::configFile()) + "\n";
-    about += "会话目录: " + cfg.sessionsDir + "\n";
-    about += "系统提示词: " + paths::toUtf8(paths::sysPromptFile()) + "\n";
-    about += "工具提示词: " + paths::toUtf8(paths::toolPromptFile()) + "\n";
-    about += "标题提示词: " + paths::toUtf8(paths::titlePromptFile()) + "\n";
-    about += "附件类型: " + paths::toUtf8(paths::attachmentsConfigFile()) +
-             "\n";
-    about += "网关请求头: " + paths::toUtf8(paths::gatewaysFile()) + "\n\n";
-    about += "依赖: SDL3, SDLGui, libllmapi, md4c, cJSON, libcurl, SDL3_ttf\n";
-    about += "许可证: GPL-3.0-only（本程序）；第三方库各自遵循其许可证";
-    aboutText_->setText(about);
-
     selectPage(-1);
     error_->setText("");
     modal_->showModal();
@@ -1441,6 +1489,14 @@ void SettingsDialog::applyTheme(const sg::Theme& theme)
         deleteProfile_->setTextColor(sg::Color(220, 70, 70));
     if (fontSummary_)
         fontSummary_->setTextColor(theme.mutedText);
+    if (aboutTitle_)
+        aboutTitle_->setTextColor(theme.text);
+    if (aboutVersion_)
+        aboutVersion_->setTextColor(theme.mutedText);
+    if (aboutAuthor_)
+        aboutAuthor_->setTextColor(theme.text);
+    if (aboutLink_)
+        aboutLink_->setTextColor(theme.menuAccent);
     if (logView_)
     {
         logView_->setDefaultTextColor(theme.text);
@@ -2192,10 +2248,17 @@ void ModelCatalogDialog::reload(bool force)
         providerList_->clear();
         modelList_->clear();
         setMissingView(true);
-        missingText_->setText(
-            std::string(tr().apiJsonMissing) + "\n" +
-            tr().apiJsonMissingHint + "\n\n" + cat_->error + "\n" +
-            paths::toUtf8(cat_->path));
+        if (paths::isMobile())
+        {
+            missingText_->setText(tr().apiJsonMissing);
+        }
+        else
+        {
+            missingText_->setText(
+                std::string(tr().apiJsonMissing) + "\n" +
+                tr().apiJsonMissingHint + "\n\n" + cat_->error + "\n" +
+                paths::toUtf8(cat_->path));
+        }
         return;
     }
 
@@ -2204,6 +2267,7 @@ void ModelCatalogDialog::reload(bool force)
     source_->setText(ellipsize(std::string(tr().catalogSource) + ": " +
                                    paths::toUtf8(cat_->path),
                                660));
+    source_->setVisible(!paths::isMobile());
     rebuildProviders();
 }
 
@@ -2573,7 +2637,10 @@ ApiUpdateDialog::ApiUpdateDialog(sg::Widget* root, sg::Window* window,
     panel_->pos(0, 0)->sz(720, 430);
     panel_->setColors(sg::Color(42, 44, 50), sg::Color(70, 73, 80), 1);
     modal_->setPanel(panel_);
-    modal_->setResponsivePanel(true, 32, 24, 720, 430, 900, 620);
+    if (paths::isMobile())
+        modal_->setResponsivePanel(true, 8, 8, 280, 380, 900, 620);
+    else
+        modal_->setResponsivePanel(true, 32, 24, 720, 430, 900, 620);
 
     title_ = addLabel(panel_, 24, 16, 640, tr().updateApi,
                       sg::Color(225, 228, 234));
@@ -2602,8 +2669,9 @@ ApiUpdateDialog::ApiUpdateDialog(sg::Widget* root, sg::Window* window,
     portLabel_->setVisible(false);
     port_->setVisible(false);
 
-    addLabel(panel_, 24, 168, 660, tr().apiUpdateHint,
-             sg::Color(135, 138, 145));
+    hint_ = addLabel(panel_, 24, 168, 660, tr().apiUpdateHint,
+                     sg::Color(135, 138, 145));
+    hint_->setWordWrap(true);
 
     progress_ = panel_->addChild<ProgressBar>();
     progress_->pos(24, 210)->sz(660, 22);
@@ -2641,6 +2709,74 @@ void ApiUpdateDialog::setOnCompleted(std::function<void()> onCompleted)
     onCompleted_ = std::move(onCompleted);
 }
 
+void ApiUpdateDialog::layout()
+{
+    if (!panel_)
+        return;
+
+    int w = panel_->width();
+    int h = panel_->height();
+    if (w <= 0 || h <= 0)
+        return;
+
+    int m = mobile_ ? 12 : 24;
+    int contentW = std::max(160, w - 2 * m);
+
+    if (!mobile_)
+    {
+        title_->setPosition(24, 16);
+        title_->setSize(640, 28);
+        urlLabel_->setPosition(24, 64);
+        urlLabel_->setSize(std::max(160, contentW), 20);
+        url_->setPosition(24, 86);
+        url_->setSize(std::min(660, contentW), 32);
+        hint_->setPosition(24, 168);
+        hint_->setSize(std::min(660, contentW), 44);
+        progress_->setPosition(24, 210);
+        progress_->setSize(std::min(660, contentW), 22);
+        status_->setPosition(24, 244);
+        status_->setSize(std::min(660, contentW), 20);
+        error_->setPosition(24, 272);
+        error_->setSize(std::min(660, contentW),
+                        std::max(40, h - 272 - 90));
+        return;
+    }
+
+    title_->setPosition(m, 8);
+    title_->setSize(contentW, 28);
+
+    urlLabel_->setPosition(m, 48);
+    urlLabel_->setSize(contentW, 20);
+    url_->setPosition(m, 70);
+    url_->setSize(contentW, 32);
+
+    proxy_->setPosition(m, 112);
+    proxy_->setSize(150, 26);
+    portLabel_->setPosition(m + 160, 114);
+    portLabel_->setSize(60, 20);
+    port_->setPosition(m + 222, 108);
+    port_->setSize(80, 32);
+
+    hint_->setPosition(m, 152);
+    hint_->setSize(contentW, 64);
+
+    progress_->setPosition(m, 222);
+    progress_->setSize(contentW, 22);
+    status_->setPosition(m, 252);
+    status_->setSize(contentW, 20);
+    error_->setPosition(m, 278);
+    error_->setSize(contentW, std::max(40, h - 278 - 92));
+
+    int bw = std::max(90, (contentW - 8) / 2);
+    start_->setAnchors(0);
+    start_->setPosition(m, h - 56);
+    start_->setSize(bw, 44);
+
+    back_->setAnchors(0);
+    back_->setPosition(m + bw + 8, h - 56);
+    back_->setSize(bw, 44);
+}
+
 void ApiUpdateDialog::open()
 {
     if (!running_)
@@ -2666,7 +2802,9 @@ void ApiUpdateDialog::open()
         updateProxyRow();
     }
 
+    mobile_ = paths::isMobile() || modal_->width() < 720;
     modal_->showModal();
+    layout();
 }
 
 void ApiUpdateDialog::close()

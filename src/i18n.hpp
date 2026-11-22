@@ -76,6 +76,7 @@ struct Strings
     const char* settingsAppearance;
     const char* settingsCustom;
     const char* settingsAbout;
+    const char* aboutAuthorPrefix;
     const char* logs;
     const char* viewLogs;
     const char* exportLogs;

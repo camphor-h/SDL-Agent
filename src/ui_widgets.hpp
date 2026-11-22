@@ -4,6 +4,7 @@
 
 #include "sdlgui.hpp"
 
+#include <cstddef>
 #include <memory>
 #include <functional>
 #include <string>
@@ -83,6 +84,25 @@ private:
     int          barH_ = 0;
 };
 
+//Draws an embedded PNG scaled to fit its rectangle, preserving aspect.
+class ImageWidget : public sdlgui::Widget
+{
+public:
+    explicit ImageWidget(sdlgui::Widget* parent = nullptr);
+    ~ImageWidget() override;
+
+    bool setImage(const void* data, std::size_t size);
+
+    void onRender(SDL_Renderer* renderer) override;
+
+private:
+    const unsigned char* data_ = nullptr;
+    std::size_t          size_ = 0;
+    SDL_Texture*         texture_ = nullptr;
+    int                  texW_ = 0;
+    int                  texH_ = 0;
+};
+
 //Simple horizontal progress bar (0..1).
 class ProgressBar : public sdlgui::Widget
 {
@@ -137,7 +157,7 @@ private:
 class GlyphButton : public sdlgui::Widget
 {
 public:
-    enum class Glyph { Plus, Return };
+    enum class Glyph { Plus, Return, Camera };
 
     explicit GlyphButton(sdlgui::Widget* parent = nullptr);
 

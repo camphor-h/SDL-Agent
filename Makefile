@@ -129,6 +129,7 @@ build/%.o: src/%.cc
 build/prompt.o: $(PROMPT_INC)
 
 build/app.o: $(ICON_INC)
+build/dialogs.o: $(ICON_BAR_INC)
 build/ui_widgets.o: $(ICON_BAR_INC)
 build/ca_bundle.o: $(CA_INC)
 

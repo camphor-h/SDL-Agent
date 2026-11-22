@@ -21,6 +21,7 @@ namespace sdlagent::ui
 
 class Modal;
 class Panel;
+class ImageWidget;
 class FontDialog;
 class ModelCatalogDialog;
 class ApiUpdateDialog;
@@ -169,7 +170,11 @@ private:
     sdlgui::Button*   editTitle_ = nullptr;
 
     //about
-    sdlgui::Label* aboutText_ = nullptr;
+    ImageWidget*   aboutImage_ = nullptr;
+    sdlgui::Label* aboutTitle_ = nullptr;
+    sdlgui::Label* aboutVersion_ = nullptr;
+    sdlgui::Label* aboutAuthor_ = nullptr;
+    sdlgui::Label* aboutLink_ = nullptr;
 
     //logs
     sdlgui::RichTextView* logView_ = nullptr;
@@ -377,6 +382,7 @@ private:
     void joinWorker();
     void setRunning(bool running);
     void updateProxyRow();
+    void layout();
 
     sdlgui::Window* window_ = nullptr;
     Modal*          modal_ = nullptr;
@@ -388,11 +394,13 @@ private:
     sdlgui::CheckBox* proxy_ = nullptr;
     sdlgui::Label*    portLabel_ = nullptr;
     sdlgui::TextBox*  port_ = nullptr;
+    sdlgui::Label*    hint_ = nullptr;
     ProgressBar*      progress_ = nullptr;
     sdlgui::Label*    status_ = nullptr;
     sdlgui::Label*    error_ = nullptr;
     sdlgui::Button*   start_ = nullptr;
     sdlgui::Button*   back_ = nullptr;
+    bool              mobile_ = false;
 
     std::thread        worker_;
     std::atomic<bool>  cancel_{ false };

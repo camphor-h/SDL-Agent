@@ -178,11 +178,11 @@ public:
 
             float dw = (float)it->second.w / scale_;
             float dh = (float)it->second.h / scale_;
-            float dy = (float)y;
-            if (dh < (float)lineHeight_)
-                dy = (float)y + ((float)lineHeight_ - dh) * 0.5f;
 
-            SDL_FRect dst = { penX, dy, dw, dh };
+            //Top-align inside the logical line box. lineSkip includes the
+            //line gap; centering here pushed text downward on fonts with a
+            //large gap (Noto CJK), clipping descenders.
+            SDL_FRect dst = { penX, (float)y, dw, dh };
             SDL_RenderTexture(renderer, texture, nullptr, &dst);
 
             penX += dw;
@@ -241,11 +241,16 @@ private:
         return (int)std::lround((double)px / (double)scale_);
     }
 
+    int toLogicalCeil(int px) const
+    {
+        return (int)std::ceil((double)px / (double)scale_);
+    }
+
     void refreshMetrics()
     {
-        lineHeight_ = toLogical(TTF_GetFontLineSkip(font_));
+        lineHeight_ = toLogicalCeil(TTF_GetFontLineSkip(font_));
         if (lineHeight_ <= 0)
-            lineHeight_ = toLogical(TTF_GetFontHeight(font_));
+            lineHeight_ = toLogicalCeil(TTF_GetFontHeight(font_));
         if (lineHeight_ <= 0)
             lineHeight_ = pointSize_;
 
@@ -255,7 +260,7 @@ private:
 
         if (emoji_)
         {
-            int eh = toLogical(TTF_GetFontLineSkip(emoji_));
+            int eh = toLogicalCeil(TTF_GetFontLineSkip(emoji_));
             int ea = toLogical(TTF_GetFontAscent(emoji_));
             if (eh > lineHeight_)
                 lineHeight_ = eh;
@@ -544,11 +549,11 @@ std::string detectSystemFontPath()
     candidates.push_back("/System/Library/Fonts/Helvetica.ttc");
     candidates.push_back("/Library/Fonts/Arial Unicode.ttf");
 #elif defined(__ANDROID__)
-    candidates.push_back("/system/fonts/NotoSansCJK-Regular.ttc");
-    candidates.push_back("/system/fonts/NotoSansCJK-Regular.ttf");
     candidates.push_back("/system/fonts/NotoSansCJKsc-Regular.otf");
     candidates.push_back("/system/fonts/NotoSansSC-Regular.otf");
     candidates.push_back("/system/fonts/NotoSansSC-Regular.ttf");
+    candidates.push_back("/system/fonts/NotoSansCJK-Regular.ttc");
+    candidates.push_back("/system/fonts/NotoSansCJK-Regular.ttf");
     candidates.push_back("/system/fonts/DroidSansFallback.ttf");
     candidates.push_back("/system/fonts/Roboto-Regular.ttf");
 #else
@@ -620,6 +625,70 @@ std::string detectEmojiFontPath()
     return {};
 }
 
+static TTF_Font* openFontFace(const std::string& path, float ptSize, int face)
+{
+    if (face <= 0)
+        return TTF_OpenFont(path.c_str(), ptSize);
+
+    SDL_PropertiesID props = SDL_CreateProperties();
+    if (!props)
+        return TTF_OpenFont(path.c_str(), ptSize);
+
+    SDL_SetStringProperty(props, TTF_PROP_FONT_CREATE_FILENAME_STRING,
+                          path.c_str());
+    SDL_SetFloatProperty(props, TTF_PROP_FONT_CREATE_SIZE_FLOAT, ptSize);
+    SDL_SetNumberProperty(props, TTF_PROP_FONT_CREATE_FACE_NUMBER,
+                          (Sint64)face);
+
+    TTF_Font* font = TTF_OpenFontWithProperties(props);
+    SDL_DestroyProperties(props);
+    return font;
+}
+
+static bool isFontCollection(const std::string& path)
+{
+    std::string lower = path;
+    for (char& c : lower)
+        c = (char)std::tolower((unsigned char)c);
+    return lower.size() > 4 &&
+           (lower.compare(lower.size() - 4, 4, ".ttc") == 0 ||
+            lower.compare(lower.size() - 4, 4, ".otc") == 0);
+}
+
+//A .ttc holds several faces (JP/KR/SC/TC). Pick the Simplified Chinese one
+//instead of assuming face 0.
+static int preferredFace(const std::string& path)
+{
+    TTF_Font* probe = TTF_OpenFont(path.c_str(), 16.0f);
+    if (!probe)
+        return 0;
+
+    int count = TTF_GetNumFontFaces(probe);
+    TTF_CloseFont(probe);
+    if (count <= 1)
+        return 0;
+
+    for (int i = 0; i < count; ++i)
+    {
+        TTF_Font* f = openFontFace(path, 16.0f, i);
+        if (!f)
+            continue;
+
+        const char* family = TTF_GetFontFamilyName(f);
+        std::string name = family ? family : "";
+        for (char& c : name)
+            c = (char)std::tolower((unsigned char)c);
+
+        bool simplified = name.find(" sc") != std::string::npos ||
+                          name.find("simplified") != std::string::npos ||
+                          name.find(" cn") != std::string::npos;
+        TTF_CloseFont(f);
+        if (simplified)
+            return i;
+    }
+    return 0;
+}
+
 std::shared_ptr<sdlgui::Font> load(const std::string& path, int pointSize,
                                    std::string& err)
 {
@@ -640,7 +709,8 @@ std::shared_ptr<sdlgui::Font> load(const std::string& path, int pointSize,
     if (rasterSize < 1)
         rasterSize = 1;
 
-    TTF_Font* f = TTF_OpenFont(path.c_str(), (float)rasterSize);
+    int face = isFontCollection(path) ? preferredFace(path) : 0;
+    TTF_Font* f = openFontFace(path, (float)rasterSize, face);
     if (!f)
     {
         const char* e = SDL_GetError();
@@ -653,7 +723,10 @@ std::shared_ptr<sdlgui::Font> load(const std::string& path, int pointSize,
     TTF_Font* emoji = nullptr;
     std::string emojiPath = detectEmojiFontPath();
     if (!emojiPath.empty() && emojiPath != path)
-        emoji = TTF_OpenFont(emojiPath.c_str(), (float)rasterSize);
+        emoji = openFontFace(emojiPath, (float)rasterSize,
+                             isFontCollection(emojiPath)
+                                 ? preferredFace(emojiPath)
+                                 : 0);
 
     return std::make_shared<TtfFont>(f, emoji, pointSize, scale);
 }

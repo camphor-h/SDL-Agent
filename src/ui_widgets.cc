@@ -5,6 +5,7 @@
 #include "icon_bar_data.inc"
 
 #include <algorithm>
+#include <cmath>
 
 namespace sdlagent::ui
 {
@@ -211,6 +212,66 @@ bool ChatView::nearBottom(int slack) const
 void ChatView::scrollToBottom()
 {
     setScrollOffset(0, std::max(0, contentH_ - height_));
+}
+
+ImageWidget::ImageWidget(sg::Widget* parent)
+    : sg::Widget(parent)
+{
+}
+
+ImageWidget::~ImageWidget()
+{
+    if (texture_)
+        SDL_DestroyTexture(texture_);
+}
+
+bool ImageWidget::setImage(const void* data, std::size_t size)
+{
+    if (texture_)
+    {
+        SDL_DestroyTexture(texture_);
+        texture_ = nullptr;
+        texW_ = texH_ = 0;
+    }
+    data_ = static_cast<const unsigned char*>(data);
+    size_ = size;
+    markDirty();
+    return data_ && size_ > 0;
+}
+
+void ImageWidget::onRender(SDL_Renderer* renderer)
+{
+    if (!visible() || !data_ || size_ == 0)
+        return;
+
+    if (!texture_)
+    {
+        SDL_IOStream* io = SDL_IOFromConstMem(data_, size_);
+        SDL_Surface* surface = io ? SDL_LoadPNG_IO(io, true) : nullptr;
+        if (!surface)
+            return;
+        texture_ = SDL_CreateTextureFromSurface(renderer, surface);
+        texW_ = surface->w;
+        texH_ = surface->h;
+        SDL_DestroySurface(surface);
+        if (!texture_)
+            return;
+    }
+
+    sg::Rect r = absoluteRect();
+    if (r.w <= 0 || r.h <= 0 || texW_ <= 0 || texH_ <= 0)
+        return;
+
+    float scale = std::min((float)r.w / (float)texW_,
+                           (float)r.h / (float)texH_);
+    float w = (float)texW_ * scale;
+    float h = (float)texH_ * scale;
+
+    SDL_FRect dst = { (float)r.x + ((float)r.w - w) * 0.5f,
+                      (float)r.y + ((float)r.h - h) * 0.5f, w, h };
+    SDL_RenderTexture(renderer, texture_, nullptr, &dst);
+
+    dirty_ = false;
 }
 
 ProgressBar::ProgressBar(sg::Widget* parent)
@@ -441,6 +502,50 @@ void GlyphButton::onRender(SDL_Renderer* renderer)
             SDL_RenderLine(renderer, cx - s, cy + o, cx + s, cy + o);
             SDL_RenderLine(renderer, cx + o, cy - s, cx + o, cy + s);
         }
+        dirty_ = false;
+        return;
+    }
+
+    if (glyph_ == Glyph::Camera)
+    {
+        //Geometry from a 24x24 outline icon:
+        //body M3 8 H7 L9 4 H15 L17 8 H21 V19 H3 Z, lens at (12,13.5) r=3.8
+        float box = std::min((float)r.w, (float)r.h) * 0.72f;
+        float u = box / 24.0f;
+        float ox = cx - 12.0f * u;
+        float oy = cy - 12.0f * u;
+
+        auto px = [&](float v) { return ox + v * u; };
+        auto py = [&](float v) { return oy + v * u; };
+        auto line = [&](float x1, float y1, float x2, float y2)
+        {
+            SDL_RenderLine(renderer, px(x1), py(y1), px(x2), py(y2));
+        };
+
+        line(3, 8, 7, 8);
+        line(7, 8, 9, 4);
+        line(9, 4, 15, 4);
+        line(15, 4, 17, 8);
+        line(17, 8, 21, 8);
+        line(21, 8, 21, 19);
+        line(21, 19, 3, 19);
+        line(3, 19, 3, 8);
+
+        float lx = px(12);
+        float ly = py(13.5f);
+        float lr = 3.8f * u;
+        float prevX = lx + lr;
+        float prevY = ly;
+        for (int i = 1; i <= 20; ++i)
+        {
+            float a = (float)i * 6.2831853f / 20.0f;
+            float nx = lx + std::cos(a) * lr;
+            float ny = ly + std::sin(a) * lr;
+            SDL_RenderLine(renderer, prevX, prevY, nx, ny);
+            prevX = nx;
+            prevY = ny;
+        }
+
         dirty_ = false;
         return;
     }
