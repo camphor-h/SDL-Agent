@@ -77,7 +77,6 @@ private:
 
     ChatView*            view_ = nullptr;
     Panel*               inputPanel_ = nullptr;
-    Panel*               inputFrame_ = nullptr;
     InputBox*            input_ = nullptr;
     sdlgui::Label*       hint_ = nullptr;
     sdlgui::Label*       usageLabel_ = nullptr;

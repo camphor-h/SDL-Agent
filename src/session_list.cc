@@ -292,14 +292,6 @@ void SessionList::onRender(SDL_Renderer* renderer)
                     std::max(0, maxText), color);
     }
 
-    if (rows_.empty())
-    {
-        std::string empty = tr().newChat;
-        int w = textWidth(empty);
-        drawClipped(renderer, empty, r.x + (r.w - w) / 2, r.y + 20,
-                    r.w, mutedColor_);
-    }
-
     drawScrollbar(renderer, r);
 
     SDL_SetRenderClipRect(renderer, hadClip ? &prev : nullptr);

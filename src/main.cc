@@ -54,6 +54,13 @@ static int SDLCALL appMain(int argc, char** argv)
     return rc;
 }
 
+#if defined(__ANDROID__)
+// SDLActivity loads libmain.so and calls SDL_main through dlsym().
+extern "C" SDLMAIN_DECLSPEC int SDLCALL SDL_main(int argc, char** argv)
+{
+    return SDL_RunApp(argc, argv, appMain, nullptr);
+}
+#else
 int main(int argc, char** argv)
 {
 #ifdef _WIN32
@@ -65,6 +72,7 @@ int main(int argc, char** argv)
     return SDL_RunApp(argc, argv, appMain, nullptr);
 #endif
 }
+#endif
 
 #ifdef _WIN32
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)

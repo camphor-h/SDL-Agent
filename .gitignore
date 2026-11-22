@@ -7,3 +7,26 @@ assets/api.json
 # download/backup files
 *.download
 *.bak
+
+# Android build outputs
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/.externalNativeBuild/
+android/local.properties
+android/captures/
+
+# IDE project files
+.idea/
+*.iml
+
+# Packaged artifacts that may be copied out of build/
+*.apk
+*.aab
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -187,7 +187,10 @@ void SettingsDialog::build(sg::Widget* root)
     panel_->pos(0, 0)->sz(1100, 700);
     panel_->setColors(sg::Color(42, 44, 50), sg::Color(70, 73, 80), 1);
     modal_->setPanel(panel_);
-    modal_->setResponsivePanel(true, 32, 20, 820, 520, 1200, 900);
+    if (paths::isMobile())
+        modal_->setResponsivePanel(true, 8, 8, 320, 480, 1200, 900);
+    else
+        modal_->setResponsivePanel(true, 32, 20, 820, 520, 1200, 900);
 
     fontDialog_ = std::make_unique<FontDialog>(
         root,
@@ -279,22 +282,14 @@ void SettingsDialog::build(sg::Widget* root)
         rebuildProfileList();
     };
 
-    //Double-click a profile to open the edit page directly.
-    auto listMouseDown = profileList_->onMouseDown;
-    profileList_->onMouseDown = [this, listMouseDown](sg::MouseEvent& e)
+    //Double-click (or Enter) a profile to open the edit page directly.
+    profileList_->onItemActivated = [this](int index)
     {
-        if (listMouseDown)
-            listMouseDown(e);
-
-        if (e.clicks >= 2 && e.x < profileList_->width() - 16)
-        {
-            int index = profileList_->selectedIndex();
-            if (index >= 0 && index < (int)profiles_.size())
-                editProfile(index);
-        }
+        if (index >= 0 && index < (int)profiles_.size())
+            editProfile(index);
     };
 
-    makePage(formScroll_, formContent_, 430);
+    makePage(formScroll_, formContent_, 500);
     makePage(appearanceScroll_, appearanceContent_, 440);
     makePage(customScroll_, customContent_, 600);
     makePage(aboutScroll_, aboutContent_, 460);
@@ -341,6 +336,14 @@ void SettingsDialog::build(sg::Widget* root)
 
                 model_->setText(m.id);
                 refreshReasoningOptions(m.id, trim(baseUrl_->text()), "");
+
+                if (protocol_)
+                {
+                    std::string proto = catalog::protocolFromNpm(p.npm);
+                    protocol_->setSelectedIndex(proto == "anthropic" ? 2
+                                              : proto == "responses" ? 1
+                                                                     : 0);
+                }
                 if (m.context > 0)
                 {
                     int ctx = std::max(256, std::min(m.context, 1048576));
@@ -367,6 +370,15 @@ void SettingsDialog::build(sg::Widget* root)
                                sg::Color(200, 203, 210));
     reasoningEffort_ = formContent_->addChild<sg::DropDown>();
     reasoningEffort_->pos(0, y + 22)->sz(260, 30);
+    y += 62;
+
+    protocolLabel_ = addLabel(formContent_, 0, y, 220, tr().apiProtocol,
+                              sg::Color(200, 203, 210));
+    protocol_ = formContent_->addChild<sg::DropDown>();
+    protocol_->pos(0, y + 22)->sz(260, 30);
+    protocol_->addItem("OpenAI Chat");
+    protocol_->addItem("OpenAI Responses");
+    protocol_->addItem("Anthropic");
 
     //Appearance page
     y = 0;
@@ -397,8 +409,9 @@ void SettingsDialog::build(sg::Widget* root)
     showReasoning_->setText(tr().showReasoning);
     y += 44;
 
-    addLabel(appearanceContent_, 0, y, 240, tr().fontSection,
-             sg::Color(200, 203, 210));
+    fontSectionLabel_ = addLabel(appearanceContent_, 0, y, 240,
+                                 tr().fontSection,
+                                 sg::Color(200, 203, 210));
     y += 28;
 
     fontSummary_ = addLabel(appearanceContent_, 0, y, 620, "",
@@ -424,8 +437,16 @@ void SettingsDialog::build(sg::Widget* root)
     };
     y += 46;
 
-    addLabel(appearanceContent_, 0, y, 620, tr().fontHint,
-             sg::Color(135, 138, 145));
+    fontHintLabel_ = addLabel(appearanceContent_, 0, y, 620,
+                              tr().fontHint, sg::Color(135, 138, 145));
+
+    if (paths::isMobile())
+    {
+        fontSectionLabel_->setVisible(false);
+        fontSummary_->setVisible(false);
+        fontButton_->setVisible(false);
+        fontHintLabel_->setVisible(false);
+    }
 
     //Custom page
     y = 0;
@@ -597,11 +618,11 @@ void SettingsDialog::build(sg::Widget* root)
     saveProfile_->setText(tr().saveProfile);
     saveProfile_->onClick = [this](sg::MouseEvent&) { saveProfileForm(); };
 
-    sg::Button* back = panel_->addChild<sg::Button>();
-    back->pos(0, 0)->sz(200, 44);
-    back->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 24, 24);
-    back->setText(tr().back);
-    back->onClick = [this](sg::MouseEvent&)
+    back_ = panel_->addChild<sg::Button>();
+    back_->pos(0, 0)->sz(200, 44);
+    back_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 24, 24);
+    back_->setText(tr().back);
+    back_->onClick = [this](sg::MouseEvent&)
     {
         if (page_ == 4)
             selectPage(0);
@@ -640,7 +661,8 @@ void SettingsDialog::build(sg::Widget* root)
 
 void SettingsDialog::layoutFields(int panelW, int)
 {
-    int contentW = std::max(480, panelW - 24 - 24 - 8);
+    int contentW = std::max(panelW < 640 ? 300 : 480,
+                            panelW - 24 - 24 - 8);
 
     auto setPage = [&](sg::ScrollView* sv, sg::Widget* content, int height)
     {
@@ -648,7 +670,7 @@ void SettingsDialog::layoutFields(int panelW, int)
         sv->setContentSize(contentW, height);
     };
 
-    setPage(formScroll_, formContent_, 430);
+    setPage(formScroll_, formContent_, 500);
     setPage(appearanceScroll_, appearanceContent_, 440);
     setPage(customScroll_, customContent_, 600);
     setPage(aboutScroll_, aboutContent_, 460);
@@ -730,6 +752,78 @@ void SettingsDialog::layoutFields(int panelW, int)
     placeMenu(tabAppearance_, 148);
     placeMenu(tabCustom_, 216);
     placeMenu(tabAbout_, paths::isMobile() ? 216 : 340);
+
+    //Bottom action bar: stack on narrow (phone) panels so buttons cannot
+    //overlap, keep the desktop arrangement otherwise.
+    if (panelW < 640)
+    {
+        int bm = 12;
+        int gap = 8;
+        int rowBottom = 76;
+        int half = std::max(80, (panelW - 2 * bm - gap) / 2);
+        int full = panelW - 2 * bm;
+
+        auto place = [](sg::Button* b, int x, int bottom, int w)
+        {
+            if (!b)
+                return;
+            b->setSize(w, 44);
+            b->setAnchors(sg::AnchorLeft | sg::AnchorBottom,
+                          x, 0, 0, bottom);
+        };
+
+        place(newProfile_, bm, rowBottom, half);
+        place(deleteProfile_, bm + half + gap, rowBottom, half);
+        place(logButton_, bm, rowBottom, full);
+        place(saveProfile_, bm, rowBottom, full);
+        place(logExport_, bm, rowBottom, full);
+
+        if (back_)
+        {
+            back_->setSize(full, 44);
+            back_->setAnchors(sg::AnchorLeft | sg::AnchorBottom,
+                              bm, 0, 0, 20);
+        }
+    }
+    else
+    {
+        if (newProfile_)
+        {
+            newProfile_->setSize(100, 44);
+            newProfile_->setAnchors(sg::AnchorLeft | sg::AnchorBottom,
+                                    24, 0, 0, 24);
+        }
+        if (deleteProfile_)
+        {
+            deleteProfile_->setSize(100, 44);
+            deleteProfile_->setAnchors(sg::AnchorLeft | sg::AnchorBottom,
+                                       134, 0, 0, 24);
+        }
+        if (logButton_)
+        {
+            logButton_->setSize(200, 44);
+            logButton_->setAnchors(sg::AnchorLeft | sg::AnchorBottom,
+                                   24, 0, 0, 24);
+        }
+        if (saveProfile_)
+        {
+            saveProfile_->setSize(200, 44);
+            saveProfile_->setAnchors(sg::AnchorRight | sg::AnchorBottom,
+                                     0, 0, 234, 24);
+        }
+        if (logExport_)
+        {
+            logExport_->setSize(200, 44);
+            logExport_->setAnchors(sg::AnchorRight | sg::AnchorBottom,
+                                   0, 0, 234, 24);
+        }
+        if (back_)
+        {
+            back_->setSize(180, 40);
+            back_->setAnchors(sg::AnchorRight | sg::AnchorBottom,
+                              0, 0, 24, 24);
+        }
+    }
 }
 
 void SettingsDialog::selectPage(int index)
@@ -951,6 +1045,15 @@ void SettingsDialog::editProfile(int index)
         contextTokens_->setText(tokensText(p.contextTokens));
         maxTokens_->setText(tokensText(p.maxTokens));
         refreshReasoningOptions(p.model, p.baseUrl, p.reasoningEffort);
+        if (protocol_)
+        {
+            if (p.apiProtocol == "anthropic")
+                protocol_->setSelectedIndex(2);
+            else if (p.apiProtocol == "responses")
+                protocol_->setSelectedIndex(1);
+            else
+                protocol_->setSelectedIndex(0);
+        }
     }
     else
     {
@@ -962,6 +1065,8 @@ void SettingsDialog::editProfile(int index)
         contextTokens_->setText("1m");
         maxTokens_->setText("512k");
         refreshReasoningOptions("", "", "");
+        if (protocol_)
+            protocol_->setSelectedIndex(0);
     }
 
     error_->setText("");
@@ -1021,6 +1126,13 @@ void SettingsDialog::saveProfileForm()
         if (std::find(allowed.begin(), allowed.end(), p.reasoningEffort) ==
             allowed.end())
             p.reasoningEffort.clear();
+    }
+    if (protocol_)
+    {
+        int selected = protocol_->selectedIndex();
+        p.apiProtocol = selected == 2 ? "anthropic"
+                       : selected == 1 ? "responses"
+                                       : "openai";
     }
     p.temperature = 0.0;
 
@@ -1178,6 +1290,23 @@ void SettingsDialog::close()
         onClosed_();
 }
 
+void SettingsDialog::back()
+{
+    if (!isOpen())
+        return;
+    if (apiUpdateDialog_ && apiUpdateDialog_->isOpen())
+    {
+        apiUpdateDialog_->close();
+        return;
+    }
+    if (page_ >= 0)
+    {
+        selectPage(-1);
+        return;
+    }
+    close();
+}
+
 bool SettingsDialog::isOpen() const
 {
     return modal_ && modal_->isOpen();
@@ -1216,6 +1345,7 @@ void SettingsDialog::accept()
         cfg.apiKey = active->apiKey;
         cfg.model = active->model;
         cfg.reasoningEffort = active->reasoningEffort;
+        cfg.apiProtocol = active->apiProtocol;
         cfg.temperature = active->temperature;
         cfg.contextTokens = active->contextTokens;
         cfg.maxTokens = active->maxTokens;
@@ -1226,6 +1356,7 @@ void SettingsDialog::accept()
         cfg.apiKey.clear();
         cfg.model.clear();
         cfg.reasoningEffort.clear();
+        cfg.apiProtocol = "openai";
         cfg.temperature = 0.0;
         cfg.contextTokens = 1048576;
         cfg.maxTokens = 524288;
@@ -1920,6 +2051,11 @@ ModelCatalogDialog::ModelCatalogDialog(sg::Widget* root,
             return;
         selectedProvider_ = providerRows_[row];
         rebuildModels();
+        if (mobile_)
+        {
+            page_ = 1;
+            updatePage();
+        }
     };
 
     modelLabel_ = addLabel(panel_, 292, 76, 590, tr().catalogModel,
@@ -1967,6 +2103,16 @@ ModelCatalogDialog::ModelCatalogDialog(sg::Widget* root,
     ok_->setText(tr().ok);
     ok_->onClick = [this](sg::MouseEvent&) { accept(); };
 
+    back_ = panel_->addChild<sg::Button>();
+    back_->pos(0, 0)->sz(88, 32);
+    back_->setText(tr().back);
+    back_->setVisible(false);
+    back_->onClick = [this](sg::MouseEvent&)
+    {
+        page_ = 0;
+        updatePage();
+    };
+
     missingText_ = addLabel(panel_, 60, 140, 780, "", textColor_);
     missingText_->setWordWrap(true);
     missingText_->setSize(780, 120);
@@ -1993,7 +2139,27 @@ void ModelCatalogDialog::open(ApplyFn onApply)
     modelSearch_->setText("");
     suppress_ = false;
 
+    mobile_ = paths::isMobile() || modal_->width() < 640;
+    int rw = std::max(1, modal_->width());
+    int rh = std::max(1, modal_->height());
+    if (mobile_)
+    {
+        panelW_ = std::max(280, rw - 16);
+        panelH_ = std::max(400, rh - 16);
+        page_ = 0;
+    }
+    else
+    {
+        panelW_ = 900;
+        panelH_ = 640;
+        page_ = 0;
+    }
+    panel_->setSize(panelW_, panelH_);
+
     reload(false);
+    layout();
+    updatePage();
+    modal_->relayout();
     modal_->showModal();
 }
 
@@ -2064,8 +2230,135 @@ void ModelCatalogDialog::setMissingView(bool missing)
     if (ok_) ok_->setVisible(!missing);
     if (missingText_) missingText_->setVisible(missing);
     if (missingFetch_) missingFetch_->setVisible(missing);
+    if (back_) back_->setVisible(false);
     if (cancel_)
         cancel_->setText(missing ? tr().back : tr().cancel);
+    if (!missing)
+        updatePage();
+}
+
+void ModelCatalogDialog::layout()
+{
+    int w = panelW_;
+    int h = panelH_;
+    int m = mobile_ ? 12 : 16;
+
+    if (mobile_)
+    {
+        int contentW = std::max(120, w - 2 * m);
+
+        title_->setPosition(m, 6);
+        title_->setSize(std::max(120, contentW - 100), 28);
+        source_->setPosition(m, 32);
+        source_->setSize(contentW, 20);
+        reload_->setPosition(w - m - 88, 32);
+        reload_->setSize(88, 28);
+
+        providerLabel_->setPosition(m, 64);
+        providerLabel_->setSize(contentW, 20);
+        providerSearch_->setPosition(m, 86);
+        providerSearch_->setSize(contentW, 32);
+        providerList_->setPosition(m, 126);
+        providerList_->setSize(contentW, std::max(80, h - 126 - 64));
+
+        back_->setPosition(m, 64);
+        back_->setSize(88, 32);
+        modelLabel_->setPosition(m + 100, 68);
+        modelLabel_->setSize(std::max(80, contentW - 100), 20);
+        modelSearch_->setPosition(m, 102);
+        modelSearch_->setSize(contentW, 32);
+        modelList_->setPosition(m, 142);
+        modelList_->setSize(contentW, std::max(80, h - 142 - 100 - 56));
+        details_->setPosition(m, h - 152);
+        details_->setSize(contentW, 88);
+
+        updateApi_->setPosition(m, h - 52);
+        updateApi_->setSize(140, 40);
+        cancel_->setPosition(w - m - 110, h - 52);
+        cancel_->setSize(110, 40);
+        ok_->setPosition(w - m - 110, h - 52);
+        ok_->setSize(110, 40);
+
+        missingText_->setPosition(m, 80);
+        missingText_->setSize(contentW, 180);
+        missingFetch_->setPosition(m, 272);
+        missingFetch_->setSize(200, 40);
+        return;
+    }
+
+    title_->setPosition(16, 8);
+    title_->setSize(600, 28);
+    source_->setPosition(16, 42);
+    source_->setSize(std::max(200, w - 170), 20);
+    reload_->setPosition(w - 136, 36);
+    reload_->setSize(120, 28);
+
+    providerLabel_->setPosition(16, 76);
+    providerLabel_->setSize(260, 20);
+    providerSearch_->setPosition(16, 96);
+    providerSearch_->setSize(260, 28);
+    providerList_->setPosition(16, 130);
+    providerList_->setSize(260, std::max(120, h - 130 - 90));
+
+    modelLabel_->setPosition(292, 76);
+    modelLabel_->setSize(std::max(120, w - 308), 20);
+    modelSearch_->setPosition(292, 96);
+    modelSearch_->setSize(std::max(120, w - 308), 28);
+    modelList_->setPosition(292, 130);
+    modelList_->setSize(std::max(120, w - 308), std::max(120, h - 130 - 210));
+    details_->setPosition(292, h - 200);
+    details_->setSize(std::max(120, w - 308), 116);
+
+    updateApi_->setPosition(16, h - 60);
+    updateApi_->setSize(150, 32);
+    cancel_->setPosition(w - 220, h - 60);
+    cancel_->setSize(92, 32);
+    ok_->setPosition(w - 118, h - 60);
+    ok_->setSize(92, 32);
+
+    missingText_->setPosition(60, 140);
+    missingText_->setSize(std::max(200, w - 120), 120);
+    missingFetch_->setPosition(60, 280);
+    missingFetch_->setSize(200, 38);
+}
+
+void ModelCatalogDialog::updatePage()
+{
+    if (missingMode_)
+        return;
+
+    bool models = mobile_ && page_ == 1;
+    if (back_)
+        back_->setVisible(models);
+
+    if (!mobile_)
+    {
+        if (providerLabel_) providerLabel_->setVisible(true);
+        if (providerSearch_) providerSearch_->setVisible(true);
+        if (providerList_) providerList_->setVisible(true);
+        if (modelLabel_) modelLabel_->setVisible(true);
+        if (modelSearch_) modelSearch_->setVisible(true);
+        if (modelList_) modelList_->setVisible(true);
+        if (details_) details_->setVisible(true);
+        if (updateApi_) updateApi_->setVisible(true);
+        if (ok_) ok_->setVisible(true);
+        if (cancel_) cancel_->setVisible(true);
+        return;
+    }
+
+    if (providerLabel_) providerLabel_->setVisible(!models);
+    if (providerSearch_) providerSearch_->setVisible(!models);
+    if (providerList_) providerList_->setVisible(!models);
+    if (updateApi_) updateApi_->setVisible(!models);
+    if (modelLabel_) modelLabel_->setVisible(models);
+    if (modelSearch_) modelSearch_->setVisible(models);
+    if (modelList_) modelList_->setVisible(models);
+    if (details_) details_->setVisible(models);
+    if (ok_) ok_->setVisible(models);
+    if (cancel_) cancel_->setVisible(true);
+
+    if (panel_ && panel_->getWindow())
+        panel_->getWindow()->requestRedraw();
 }
 
 void ModelCatalogDialog::rebuildProviders()

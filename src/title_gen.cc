@@ -122,6 +122,13 @@ std::string generate(const Request& request, std::atomic<bool>* cancel,
     transport.userdata = &state;
     llmapiSetTransport(ctx, &transport);
 
+    if (request.apiProtocol == "anthropic")
+        llmapiSetApi(ctx, LLMMAPI_API_ANTHROPIC);
+    else if (request.apiProtocol == "responses")
+        llmapiSetApi(ctx, LLMMAPI_API_OPENAI_RESPONSES);
+    else
+        llmapiSetApi(ctx, LLMMAPI_API_OPENAI);
+
     LlmmapiReq* req = llmapiReqNew(request.model.c_str());
     if (!req)
     {
@@ -135,8 +142,8 @@ std::string generate(const Request& request, std::atomic<bool>* cancel,
     llmapiReqSetTemperature(req, 0.0);
     llmapiReqSetMaxTokens(req, 128);
 
-    char* response = llmapiChatComplete(ctx, request.baseUrl.c_str(),
-                                        request.apiKey.c_str(), req);
+    LlmmapiResp* response = llmapiChatComplete(
+        ctx, request.baseUrl.c_str(), request.apiKey.c_str(), req);
     llmapiReqFree(req);
 
     if (!response)
@@ -147,10 +154,13 @@ std::string generate(const Request& request, std::atomic<bool>* cancel,
         return {};
     }
 
-    char* content = llmapiRespGetContent(response, 0);
-    if (!content)
-        content = llmapiRespGetReasoningContent(response, 0);
-    std::free(response);
+    char* content = llmapiRespGetText(response);
+    if (!content || !*content)
+    {
+        std::free(content);
+        content = llmapiRespGetThinking(response);
+    }
+    llmapiRespFree(response);
     llmapiCleanup(ctx);
 
     if (!content)

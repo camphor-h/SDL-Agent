@@ -293,10 +293,47 @@ App::App(bool openSettingsOnStart, std::string initialSessionId)
     if (logEventType_)
         logTimer_ = SDL_AddTimer(200, &App::logTimerProc, this);
 
+    if (paths::isMobile())
+        SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+
+    gui_.onBackPressed = [this]
+    {
+        if (settingsDialog_ && settingsDialog_->isOpen())
+        {
+            settingsDialog_->back();
+            return;
+        }
+        if (drawer_ && drawer_->isOpen())
+        {
+            drawer_->close();
+            if (win_)
+                win_->requestRedraw();
+            return;
+        }
+        gui_.quit();
+    };
+
     win_ = &gui_.addWindow(kAppName, 1180, 760);
-    win_->setTitleBarMode(sg::Window::TitleBarMode::Custom);
-    win_->setTitleBarHeight(36);
-    win_->setResizable(true);
+    if (paths::isMobile())
+    {
+        //Android: no custom titlebar; scale the UI by the display density.
+        win_->setTitleBarMode(sg::Window::TitleBarMode::Hidden);
+        float density = SDL_GetWindowDisplayScale(win_->handle());
+        if (density > 0.5f)
+        {
+            gui_.setUiScale(density);
+            //Rebuild fonts at the new raster scale.
+            std::string fontErr;
+            if (!font::apply(config_, fontErr) && !fontErr.empty())
+                log::writef("%s", fontErr.c_str());
+        }
+    }
+    else
+    {
+        win_->setTitleBarMode(sg::Window::TitleBarMode::Custom);
+        win_->setTitleBarHeight(36);
+    }
+    win_->setResizable(!paths::isMobile());
 
     //Embedded icon: one copy for the custom titlebar, one for taskbar/dock.
     win_->setTitleIconMemory(sdlagent::icon::kPng,
@@ -419,22 +456,28 @@ void App::buildUi()
 {
     sg::Widget& root = win_->root();
 
+    phoneUI_ = paths::isMobile() && root.width() < 600;
+
     mainSplit_ = root.addChild<sg::SplitView>();
     mainSplit_->pos(0, 0)->sz(root.width(), root.height());
-    mainSplit_->setAnchors(sg::AnchorLeft | sg::AnchorTop | sg::AnchorRight |
-                           sg::AnchorBottom, 0, 0, 0, 0);
+    mainSplit_->setAnchors(sg::AnchorLeft | sg::AnchorTop |
+                               sg::AnchorRight | sg::AnchorBottom,
+                           0, 0, 0, 0);
     mainSplit_->setOrientation(sg::SplitView::Orientation::SideBySide);
     mainSplit_->setSplit(0.23f);
     mainSplit_->setMinPaneSize(180);
     mainSplit_->setDividerWidth(1);
+    mainSplit_->setDividerHitWidth(8);
 
     sidebar_ = mainSplit_->addChild<ui::Panel>();
     sidebar_->setColors(sg::Color(30, 31, 35), sg::Color(0, 0, 0, 0), 0);
 
+    sg::Widget* content = mainSplit_->addChild<sg::Widget>();
+
     newChatButton_ = sidebar_->addChild<sg::Button>();
     newChatButton_->pos(10, 10)->sz(180, 38);
     newChatButton_->setAnchors(sg::AnchorLeft | sg::AnchorTop | sg::AnchorRight,
-                               10, 10, 10, 0);
+                               10, 10, phoneUI_ ? 40 : 10, 0);
     newChatButton_->setText(tr().newChat);
     newChatButton_->onClick = [this](sg::MouseEvent&) { createSession(); };
 
@@ -475,8 +518,6 @@ void App::buildUi()
                                 10, 0, 10, 10);
     settingsButton_->setText(tr().settings);
     settingsButton_->onClick = [this](sg::MouseEvent&) { openSettings(); };
-
-    sg::Widget* content = mainSplit_->addChild<sg::Widget>();
 
     contentTopbar_ = content->addChild<ui::Panel>();
     contentTopbar_->pos(0, 0)->sz(400, 42);
@@ -536,6 +577,26 @@ void App::buildUi()
             chat_->clearConfirmation();
         gui_.setFocus(chat_ ? chat_->inputWidget() : nullptr);
     };
+
+    if (phoneUI_)
+    {
+        //Phone: move the same sidebar into an overlay drawer.
+        drawer_ = root.addChild<sg::Drawer>();
+        drawer_->pos(0, 0)->sz(root.width(), root.height());
+        drawer_->setAnchors(sg::AnchorLeft | sg::AnchorTop |
+                                sg::AnchorRight | sg::AnchorBottom,
+                            0, 0, 0, 0);
+        drawer_->setSide(sg::Drawer::Side::Left);
+        drawer_->setPanelWidth(
+            std::max(240, std::min(320, root.width() - 56)));
+        drawer_->setCloseButtonVisible(true);
+
+        sidebar_->reparent(drawer_->panel());
+        sidebar_->setPosition(0, 0);
+        sidebar_->setAnchors(sg::AnchorLeft | sg::AnchorTop |
+                                 sg::AnchorRight | sg::AnchorBottom,
+                             0, 0, 0, 0);
+    }
 }
 
 void App::buildDialogs()
@@ -575,6 +636,11 @@ void App::applyTheme(const std::string& themeName)
 
     if (mainSplit_)
         mainSplit_->setDividerColor(sg::Color(0, 0, 0, 255));
+    if (drawer_)
+    {
+        drawer_->setPanelColor(theme.panelBg);
+        drawer_->setScrimColor(sg::Color(0, 0, 0, 60));
+    }
     if (sidebar_)
         sidebar_->setColors(theme.panelBg, theme.panelBorder, 0);
     if (contentTopbar_)
@@ -746,6 +812,8 @@ void App::selectSession(const std::string& id)
     }
     if (sessionList_)
         sessionList_->setActive(id);
+    if (drawer_ && drawer_->isOpen())
+        drawer_->close();
     updateTopbar();
     if (win_)
         win_->requestRedraw();
@@ -820,6 +888,13 @@ std::string App::nextUntitledTitle() const
 
 void App::toggleSidebar()
 {
+    if (drawer_)
+    {
+        drawer_->toggle();
+        if (win_)
+            win_->requestRedraw();
+        return;
+    }
     if (!sidebar_ || !mainSplit_)
         return;
     sidebar_->setVisible(!sidebar_->visible());
@@ -1029,6 +1104,7 @@ AgentRunConfig App::makeRunConfig(const std::string& sessionId) const
     rc.apiKey = config_.apiKey;
     rc.model = config_.model;
     rc.reasoningEffort = config_.reasoningEffort;
+    rc.apiProtocol = config_.apiProtocol;
     rc.headers = provider::headersFor(config_.baseUrl, config_.model,
                                       sessionId);
     rc.temperature = config_.temperature;
@@ -1454,6 +1530,7 @@ void App::maybeStartTitleJob(Session& s)
     job.request.apiKey = config_.apiKey;
     job.request.model = config_.model;
     job.request.sessionId = s.id;
+    job.request.apiProtocol = config_.apiProtocol;
     job.request.headers = provider::headersFor(config_.baseUrl,
                                                config_.model, s.id);
     job.request.prompt = prompt::readFile(paths::titlePromptFile(),
@@ -1655,6 +1732,10 @@ bool App::saveConfigFromDialog(const Config& cfg, std::string& err)
     if (!saveConfig(paths::configFile(), next, err))
         return false;
 
+    //The font raster scale follows the window UI scale, so update it first.
+    if (!paths::isMobile())
+        gui_.setUiScale(next.uiScale);
+
     {
         std::string fontErr;
         if (!font::apply(next, fontErr))
@@ -1681,7 +1762,8 @@ bool App::saveConfigFromDialog(const Config& cfg, std::string& err)
     updateTopbar();
     refreshSidebar();
 
-    gui_.setUiScale(config_.uiScale);
+    if (!paths::isMobile())
+        gui_.setUiScale(config_.uiScale);
 
     win_->requestRedraw();
     return true;

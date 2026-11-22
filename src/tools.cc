@@ -503,7 +503,11 @@ ToolResult toolShell(const Json& args, ToolContext& ctx)
 #else
     full = "cd \"" + replaceAll(cwdStr, "\"", "\\\"") + "\" && { " + command +
            " ; } > \"" + replaceAll(tmpStr, "\"", "\\\"") + "\" 2>&1";
+#if defined(__ANDROID__)
+    const char* argv[] = { "/system/bin/sh", "-c", full.c_str(), nullptr };
+#else
     const char* argv[] = { "/bin/sh", "-c", full.c_str(), nullptr };
+#endif
     proc = SDL_CreateProcess(argv, false);
 #endif
 

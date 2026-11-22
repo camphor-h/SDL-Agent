@@ -30,6 +30,7 @@ struct AgentRunConfig
     std::string apiKey;
     std::string model;
     std::string reasoningEffort; //empty = not sent
+    std::string apiProtocol = "openai"; //openai | responses | anthropic
     std::string systemPrompt; //empty = built-in
     double      temperature = 0.0;
     int         maxTokens = 4096;
@@ -117,11 +118,9 @@ private:
     void pushEvent(AgentEvent ev);
     void flushDeltas(bool force, const std::string& sessionId);
 
-    void onStream(StreamAccum& acc, LlmmapiStreamType type,
-                  const char* content, int done);
+    void onStream(StreamAccum& acc, const LlmmapiStreamEvent* ev);
 
-    static void streamTrampoline(LlmmapiStreamType type, const char* content,
-                                 int done, void* userdata);
+    static void streamTrampoline(const LlmmapiStreamEvent* ev, void* userdata);
 
     bool requestConfirmation(const ConfirmationData& data);
 

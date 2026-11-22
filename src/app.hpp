@@ -104,6 +104,8 @@ private:
     ui::Panel*       sidebar_ = nullptr;
     ui::SessionList* sessionList_ = nullptr;
     sdlgui::SplitView* mainSplit_ = nullptr;
+    sdlgui::Drawer*    drawer_ = nullptr;
+    bool               phoneUI_ = false;
     ui::Panel*       sidebarTopbar_ = nullptr;
     sdlgui::Button*  newChatButton_ = nullptr;
     sdlgui::Button*  settingsButton_ = nullptr;

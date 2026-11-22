@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <unordered_map>
@@ -27,32 +28,19 @@ bool gTtfInit = false;
 class TtfFont : public sdlgui::Font
 {
 public:
-    TtfFont(TTF_Font* font, TTF_Font* emoji, int pointSize)
+    TtfFont(TTF_Font* font, TTF_Font* emoji, int pointSize, float scale)
         : font_(font)
         , emoji_(emoji)
         , pointSize_(pointSize)
+        , scale_(scale > 0.01f ? scale : 1.0f)
     {
-        lineHeight_ = TTF_GetFontLineSkip(font_);
-        if (lineHeight_ <= 0)
-            lineHeight_ = TTF_GetFontHeight(font_);
-        if (lineHeight_ <= 0)
-            lineHeight_ = pointSize_;
-
-        ascent_ = TTF_GetFontAscent(font_);
-        if (ascent_ < 0)
-            ascent_ = lineHeight_;
+        refreshMetrics();
 
         if (emoji_)
         {
-            int eh = TTF_GetFontLineSkip(emoji_);
-            int ea = TTF_GetFontAscent(emoji_);
-            if (eh > lineHeight_)
-                lineHeight_ = eh;
-            if (ea > ascent_)
-                ascent_ = ea;
-
             //Color emoji must not be tinted by the requested text color.
             static const Uint32 probes[] = { 0x1F600, 0x1F642, 0x2764, 0x2600 };
+
             for (Uint32 cp : probes)
             {
                 TTF_ImageType type = TTF_IMAGE_INVALID;
@@ -64,6 +52,30 @@ public:
                 break;
             }
         }
+    }
+
+    void setRasterScale(float scale) override
+    {
+        if (scale < 0.5f)
+            scale = 0.5f;
+        if (scale > 4.0f)
+            scale = 4.0f;
+        if (std::fabs(scale - scale_) < 0.01f)
+            return;
+
+        scale_ = scale;
+
+        int rasterSize = (int)std::lround((double)pointSize_ * (double)scale_);
+        if (rasterSize < 1)
+            rasterSize = 1;
+
+        if (font_)
+            TTF_SetFontSize(font_, (float)rasterSize);
+        if (emoji_)
+            TTF_SetFontSize(emoji_, (float)rasterSize);
+
+        clearCache();
+        refreshMetrics();
     }
 
     ~TtfFont() override
@@ -101,7 +113,7 @@ public:
         int minx = 0, maxx = 0, miny = 0, maxy = 0, adv = 0;
         if (TTF_GetGlyphMetrics(f, (Uint32)codepoint, &minx, &maxx, &miny,
                                 &maxy, &adv))
-            return adv;
+            return toLogical(adv);
         return std::max(1, pointSize_ / 2);
     }
 
@@ -114,10 +126,9 @@ public:
         std::vector<Segment> segments =
             split(text, std::strlen(text));
 
-        int penX = x;
+        float penX = (float)x;
         for (const Segment& seg : segments)
-        {
-            if (seg.len == 0)
+        {            if (seg.len == 0)
                 continue;
 
             TextureKey key{ renderer, std::string(seg.text, seg.len),
@@ -165,15 +176,16 @@ public:
                 SDL_SetTextureAlphaMod(texture, color.a);
             }
 
-            int dy = y;
-            if (it->second.h < lineHeight_)
-                dy = y + (lineHeight_ - it->second.h) / 2;
+            float dw = (float)it->second.w / scale_;
+            float dh = (float)it->second.h / scale_;
+            float dy = (float)y;
+            if (dh < (float)lineHeight_)
+                dy = (float)y + ((float)lineHeight_ - dh) * 0.5f;
 
-            SDL_FRect dst = { (float)penX, (float)dy,
-                              (float)it->second.w, (float)it->second.h };
+            SDL_FRect dst = { penX, dy, dw, dh };
             SDL_RenderTexture(renderer, texture, nullptr, &dst);
 
-            penX += it->second.w;
+            penX += dw;
         }
     }
 
@@ -219,9 +231,38 @@ private:
     TTF_Font* emoji_ = nullptr;
     bool      emojiColor_ = false;
     int       pointSize_ = 16;
+    float     scale_ = 1.0f;
     int       lineHeight_ = 16;
     int       ascent_ = 16;
     std::unordered_map<TextureKey, Entry, TextureKeyHash> cache_;
+
+    int toLogical(int px) const
+    {
+        return (int)std::lround((double)px / (double)scale_);
+    }
+
+    void refreshMetrics()
+    {
+        lineHeight_ = toLogical(TTF_GetFontLineSkip(font_));
+        if (lineHeight_ <= 0)
+            lineHeight_ = toLogical(TTF_GetFontHeight(font_));
+        if (lineHeight_ <= 0)
+            lineHeight_ = pointSize_;
+
+        ascent_ = toLogical(TTF_GetFontAscent(font_));
+        if (ascent_ < 0)
+            ascent_ = lineHeight_;
+
+        if (emoji_)
+        {
+            int eh = toLogical(TTF_GetFontLineSkip(emoji_));
+            int ea = toLogical(TTF_GetFontAscent(emoji_));
+            if (eh > lineHeight_)
+                lineHeight_ = eh;
+            if (ea > ascent_)
+                ascent_ = ea;
+        }
+    }
 
     static bool hasGlyph(TTF_Font* f, uint32_t cp)
     {
@@ -328,7 +369,7 @@ private:
 
     int measureRange(const char* text, size_t len) const
     {
-        int total = 0;
+        float total = 0.0f;
         for (const Segment& seg : split(text, len))
         {
             if (!seg.text || seg.len == 0)
@@ -336,9 +377,9 @@ private:
             TTF_Font* f = seg.emoji ? emoji_ : font_;
             int w = 0, h = 0;
             if (TTF_GetStringSize(f, seg.text, seg.len, &w, &h))
-                total += w;
+                total += (float)w / scale_;
         }
-        return total;
+        return (int)std::lround(total);
     }
 
     void clearCache()
@@ -502,6 +543,14 @@ std::string detectSystemFontPath()
     candidates.push_back("/System/Library/Fonts/PingFang.ttc");
     candidates.push_back("/System/Library/Fonts/Helvetica.ttc");
     candidates.push_back("/Library/Fonts/Arial Unicode.ttf");
+#elif defined(__ANDROID__)
+    candidates.push_back("/system/fonts/NotoSansCJK-Regular.ttc");
+    candidates.push_back("/system/fonts/NotoSansCJK-Regular.ttf");
+    candidates.push_back("/system/fonts/NotoSansCJKsc-Regular.otf");
+    candidates.push_back("/system/fonts/NotoSansSC-Regular.otf");
+    candidates.push_back("/system/fonts/NotoSansSC-Regular.ttf");
+    candidates.push_back("/system/fonts/DroidSansFallback.ttf");
+    candidates.push_back("/system/fonts/Roboto-Regular.ttf");
 #else
     candidates.push_back("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc");
     candidates.push_back("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc");
@@ -577,7 +626,21 @@ std::shared_ptr<sdlgui::Font> load(const std::string& path, int pointSize,
     if (!initialize(err))
         return {};
 
-    TTF_Font* f = TTF_OpenFont(path.c_str(), (float)pointSize);
+    //Rasterize glyphs at physical pixel size so text stays crisp when the
+    //window is scaled through SDL's logical presentation.
+    float scale = 1.0f;
+    if (sdlgui::Application* app = sdlgui::Application::instance())
+        scale = app->uiScale();
+    if (scale < 0.5f)
+        scale = 0.5f;
+    if (scale > 4.0f)
+        scale = 4.0f;
+
+    int rasterSize = (int)std::lround((double)pointSize * (double)scale);
+    if (rasterSize < 1)
+        rasterSize = 1;
+
+    TTF_Font* f = TTF_OpenFont(path.c_str(), (float)rasterSize);
     if (!f)
     {
         const char* e = SDL_GetError();
@@ -590,9 +653,9 @@ std::shared_ptr<sdlgui::Font> load(const std::string& path, int pointSize,
     TTF_Font* emoji = nullptr;
     std::string emojiPath = detectEmojiFontPath();
     if (!emojiPath.empty() && emojiPath != path)
-        emoji = TTF_OpenFont(emojiPath.c_str(), (float)pointSize);
+        emoji = TTF_OpenFont(emojiPath.c_str(), (float)rasterSize);
 
-    return std::make_shared<TtfFont>(f, emoji, pointSize);
+    return std::make_shared<TtfFont>(f, emoji, pointSize, scale);
 }
 
 bool probe(const std::string& path, int pointSize, std::string& err)
@@ -616,7 +679,8 @@ bool probe(const std::string& path, int pointSize, std::string& err)
 bool apply(const Config& cfg, std::string& err)
 {
     //The built-in bitmap font is disabled; always resolve a system font.
-    std::string path = trim(cfg.fontPath);
+    //Mobile ignores user font settings and uses the system UI font.
+    std::string path = paths::isMobile() ? std::string() : trim(cfg.fontPath);
     if (path.empty())
         path = detectSystemFontPath();
     if (path.empty())
@@ -626,7 +690,7 @@ bool apply(const Config& cfg, std::string& err)
         return false;
     }
 
-    int size = cfg.fontPointSize;
+    int size = paths::isMobile() ? 16 : cfg.fontPointSize;
     if (size < 10) size = 10;
     if (size > 24) size = 24;
 

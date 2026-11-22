@@ -38,26 +38,22 @@ bool isMaxTokensError(const std::string& message)
 
 struct PreparedUser
 {
-    std::string content;
-    bool        json = false;
+    std::string              text;
+    std::vector<std::string> images;
 };
 
-//Builds the value for one user message. Text attachments are inlined with
-//explicit boundaries; images become OpenAI content parts with data: URLs.
+//Builds one user message. Text attachments are inlined with explicit
+//boundaries; images become data: URLs for the neutral image parts.
 PreparedUser prepareUserMessage(const Message& m,
                                 const std::filesystem::path& root)
 {
     PreparedUser out;
     std::string text = m.content;
-    bool hasImage = false;
 
     for (const Attachment& a : m.attachments)
     {
         if (attachment::isImage(a))
-        {
-            hasImage = true;
             continue;
-        }
 
         std::string body;
         std::string err;
@@ -77,20 +73,6 @@ PreparedUser prepareUserMessage(const Message& m,
         text += "[附件结束: " + a.name + "]\n";
     }
 
-    if (!hasImage)
-    {
-        out.content = std::move(text);
-        return out;
-    }
-
-    Json parts = Json::array();
-    if (!text.empty())
-    {
-        Json part = Json::object();
-        part.set("type", "text").set("text", text);
-        parts.push(std::move(part));
-    }
-
     for (const Attachment& a : m.attachments)
     {
         if (!attachment::isImage(a))
@@ -100,109 +82,69 @@ PreparedUser prepareUserMessage(const Message& m,
         std::string url = attachment::imageDataUrl(root, a, err);
         if (url.empty())
         {
-            Json part = Json::object();
-            part.set("type", "text")
-                .set("text", "（无法读取图片：" + a.name + "）");
-            parts.push(std::move(part));
+            text += "\n（无法读取图片：" + a.name + "）";
             continue;
         }
-
-        Json image = Json::object();
-        image.set("url", url).set("detail", "auto");
-
-        Json part = Json::object();
-        part.set("type", "image_url").set("image_url", std::move(image));
-        parts.push(std::move(part));
+        out.images.push_back(std::move(url));
     }
 
-    if (parts.size() == 0)
-    {
-        out.content = "(附件不可用)";
-        return out;
-    }
-
-    out.content = parts.dump();
-    out.json = true;
+    out.text = std::move(text);
     return out;
 }
 
 } //namespace
 
 //A private static trampoline so the C callback can reach the engine.
-void AgentEngine::streamTrampoline(LlmmapiStreamType type, const char* content,
-                                   int done, void* userdata)
+void AgentEngine::streamTrampoline(const LlmmapiStreamEvent* ev,
+                                   void* userdata)
 {
     StreamCtx* ctx = static_cast<StreamCtx*>(userdata);
-    if (!ctx || !ctx->engine || !ctx->acc)
+    if (!ctx || !ctx->engine || !ctx->acc || !ev)
         return;
-    ctx->engine->onStream(*static_cast<StreamAccum*>(ctx->acc), type, content,
-                          done);
+    ctx->engine->onStream(*static_cast<StreamAccum*>(ctx->acc), ev);
 }
 
-void AgentEngine::onStream(StreamAccum& acc, LlmmapiStreamType type,
-                           const char* content, int done)
+void AgentEngine::onStream(StreamAccum& acc, const LlmmapiStreamEvent* ev)
 {
-    (void)done;
+    if (!ev)
+        return;
 
-    if (type == LLMAPI_STREAM_TEXT)
+    switch (ev->type)
     {
-        if (!content || !*content)
-            return;
-        acc.text += content;
-        pendingText_ += content;
-        flushDeltas(false, sessionId_);
-    }
-    else if (type == LLMAPI_STREAM_THINKING)
-    {
-        if (!content || !*content)
-            return;
-        acc.thinking += content;
-        pendingThinking_ += content;
-        flushDeltas(false, sessionId_);
-    }
-    else if (type == LLMAPI_STREAM_TOOL_CALL)
-    {
-        if (!content || !*content)
-            return;
+        case LLMAPI_STREAM_TEXT:
+            if (!ev->text || !*ev->text)
+                return;
+            acc.text += ev->text;
+            pendingText_ += ev->text;
+            flushDeltas(false, sessionId_);
+            break;
 
-        Json arr = Json::parse(content);
-        if (!arr.isArray())
-            return;
+        case LLMAPI_STREAM_THINKING:
+            if (!ev->text || !*ev->text)
+                return;
+            acc.thinking += ev->text;
+            pendingThinking_ += ev->text;
+            flushDeltas(false, sessionId_);
+            break;
 
-        for (std::size_t i = 0; i < arr.size(); ++i)
+        case LLMAPI_STREAM_TOOL_CALL:
         {
-            Json item = arr[i];
-            if (!item.isObject())
-                continue;
-
-            int index = (int)acc.calls.size();
-            if (item.has("index"))
-                index = (int)item["index"].integer(index);
+            int index = (int)ev->toolIndex;
             if (index < 0)
                 index = 0;
 
             ToolAccum& call = acc.calls[index];
-
-            std::string id = item["id"].str();
-            if (!id.empty())
-                call.id = id;
-
-            std::string type = item["type"].str();
-            if (!type.empty())
-                call.type = type;
-
-            Json fn = item["function"];
-            if (!fn.isObject())
-                continue;
-
-            call.name += fn["name"].str();
-
-            Json args = fn["arguments"];
-            if (args.isString())
-                call.args += args.str();
-            else if (args.valid() && !args.isNull())
-                call.args += args.dump();
+            if (ev->toolCallId && *ev->toolCallId)
+                call.id = ev->toolCallId;
+            if (ev->toolName && *ev->toolName && call.name.empty())
+                call.name = ev->toolName;
+            if (ev->text)
+                call.args += ev->text;
+            break;
         }
+
+        case LLMAPI_STREAM_DONE:
+            break;
     }
 }
 
@@ -467,6 +409,13 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
     transport.userdata = &transportState;
     llmapiSetTransport(ctx, &transport);
 
+    if (cfg.apiProtocol == "anthropic")
+        llmapiSetApi(ctx, LLMMAPI_API_ANTHROPIC);
+    else if (cfg.apiProtocol == "responses")
+        llmapiSetApi(ctx, LLMMAPI_API_OPENAI_RESPONSES);
+    else
+        llmapiSetApi(ctx, LLMMAPI_API_OPENAI);
+
     const int kMaxRounds = 32;
     bool cancelled = false;
     bool failed = false;
@@ -508,13 +457,19 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
         if (!omitMaxTokens && cfg.maxTokens > 0)
             llmapiReqSetMaxTokens(req, (size_t)cfg.maxTokens);
         if (!cfg.reasoningEffort.empty())
-            llmapiReqSet(req, "reasoning_effort", cfg.reasoningEffort.c_str());
+            llmapiReqSetExtra(req, "reasoning_effort",
+                              cfg.reasoningEffort.c_str());
 
         if (toolsEnabled)
         {
-            std::string schema = tools_.schemaJson();
-            if (schema != "[]")
-                llmapiReqSet(req, "tools", schema.c_str());
+            for (const ToolSpec& tool : tools_.all())
+            {
+                if (!tool.available)
+                    continue;
+                llmapiReqAddTool(req, tool.name.c_str(),
+                                 tool.description.c_str(),
+                                 tool.parameters.dump().c_str());
+            }
         }
 
         std::vector<std::string> pendingToolImages;
@@ -523,25 +478,13 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
             if (pendingToolImages.empty())
                 return;
 
-            Json parts = Json::array();
-            Json text = Json::object();
-            text.set("type", "text")
-                .set("text", "Attached media from tool result:");
-            parts.push(std::move(text));
+            LlmmapiMessage* user =
+                llmapiReqAddMessage(req, LLMAPI_ROLE_USER);
+            llmapiMsgAddText(user, "Attached media from tool result:");
 
             for (const std::string& url : pendingToolImages)
-            {
-                Json image = Json::object();
-                image.set("url", url).set("detail", "auto");
-
-                Json part = Json::object();
-                part.set("type", "image_url")
-                    .set("image_url", std::move(image));
-                parts.push(std::move(part));
-            }
+                llmapiMsgAddImage(user, url.c_str());
             pendingToolImages.clear();
-
-            llmapiReqAddMsgJson(req, "user", parts.dump().c_str());
         };
 
         for (std::size_t hi = 0; hi < history.size(); ++hi)
@@ -555,8 +498,10 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
                 std::string id = m.toolCallId.empty() ? "call_0" : m.toolCallId;
                 std::string name = m.toolName.empty() ? "tool" : m.toolName;
                 std::string content = m.content.empty() ? "(无输出)" : m.content;
-                llmapiReqAddToolResult(req, id.c_str(), name.c_str(),
-                                       content.c_str());
+                (void)name;
+                LlmmapiMessage* tool =
+                    llmapiReqAddMessage(req, LLMAPI_ROLE_TOOL);
+                llmapiMsgAddToolResult(tool, id.c_str(), content.c_str());
 
                 for (const Attachment& a : m.attachments)
                 {
@@ -577,7 +522,44 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
             if (m.role == Role::Assistant && !m.toolCalls.empty() &&
                 m.toolCalls != "[]")
             {
-                llmapiReqAddAssistantToolCalls(req, m.toolCalls.c_str());
+                LlmmapiMessage* assistant =
+                    llmapiReqAddMessage(req, LLMAPI_ROLE_ASSISTANT);
+                if (!m.content.empty())
+                    llmapiMsgAddText(assistant, m.content.c_str());
+
+                Json calls = Json::parse(m.toolCalls);
+                if (calls.isArray())
+                {
+                    for (std::size_t ci = 0; ci < calls.size(); ++ci)
+                    {
+                        Json call = calls[ci];
+                        if (!call.isObject())
+                            continue;
+
+                        std::string id = call["id"].str("call_0");
+                        std::string name;
+                        std::string args = "{}";
+
+                        Json fn = call["function"];
+                        if (fn.isObject())
+                        {
+                            name = fn["name"].str();
+                            Json value = fn["arguments"];
+                            if (value.isString())
+                                args = value.str();
+                            else if (value.valid() && !value.isNull())
+                                args = value.dump();
+                        }
+
+                        if (id.empty())
+                            id = "call_0";
+                        if (name.empty())
+                            name = "tool";
+
+                        llmapiMsgAddToolCall(assistant, id.c_str(),
+                                             name.c_str(), args.c_str());
+                    }
+                }
                 continue;
             }
 
@@ -590,12 +572,13 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
                         prepareUserMessage(m, cfg.sessionsRoot);
                     it = preparedUsers.emplace(hi, std::move(prepared)).first;
                 }
-                if (it->second.json)
-                    llmapiReqAddMsgJson(req, "user",
-                                        it->second.content.c_str());
-                else
-                    llmapiReqAddMsg(req, "user",
-                                    it->second.content.c_str());
+
+                LlmmapiMessage* user =
+                    llmapiReqAddMessage(req, LLMAPI_ROLE_USER);
+                if (!it->second.text.empty())
+                    llmapiMsgAddText(user, it->second.text.c_str());
+                for (const std::string& url : it->second.images)
+                    llmapiMsgAddImage(user, url.c_str());
                 continue;
             }
 
@@ -623,8 +606,9 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
 
         flushDeltas(true, sid);
 
-        int totalTokens = 0, promptTokens = 0, completionTokens = 0;
-        llmapiStreamGetUsage(ctx, &totalTokens, &promptTokens, &completionTokens);
+        long totalTokens = 0, promptTokens = 0, completionTokens = 0;
+        llmapiStreamGetUsage(ctx, &totalTokens, &promptTokens,
+                             &completionTokens);
         if (promptTokens < 0) promptTokens = 0;
         if (completionTokens < 0) completionTokens = 0;
         (void)totalTokens;
@@ -665,8 +649,8 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
         assistant.reasoning = acc.thinking;
         assistant.toolCalls = buildToolCallsJson(acc.calls);
         assistant.timestamp = nowMs();
-        assistant.promptTokens = promptTokens;
-        assistant.completionTokens = completionTokens;
+        assistant.promptTokens = (int)promptTokens;
+        assistant.completionTokens = (int)completionTokens;
 
         if (assistant.content.empty() && assistant.reasoning.empty() &&
             (assistant.toolCalls.empty() || assistant.toolCalls == "[]"))

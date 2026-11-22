@@ -111,6 +111,7 @@ struct Strings
     const char* maxTokens;
     const char* reasoningEffort;
     const char* reasoningDefault;
+    const char* apiProtocol;
     const char* sessionsDir;
     const char* sessionsDirHint;
     const char* configDir;

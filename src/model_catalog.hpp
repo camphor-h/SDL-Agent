@@ -56,4 +56,8 @@ bool supportsImage(const std::string& modelId, bool* found = nullptr);
 std::vector<std::string> reasoningEfforts(const std::string& modelId,
                                           const std::string& baseUrl);
 
+//Wire protocol implied by a models.dev provider npm field:
+//"anthropic", "responses" or "openai".
+std::string protocolFromNpm(const std::string& npm);
+
 } //namespace sdlagent::catalog

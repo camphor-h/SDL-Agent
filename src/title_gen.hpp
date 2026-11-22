@@ -20,6 +20,7 @@ struct Request
     std::string userText;
     std::string assistantText;
     std::string sessionId;
+    std::string apiProtocol = "openai";
     std::vector<HttpHeader> headers;
 };
 

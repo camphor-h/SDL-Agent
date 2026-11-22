@@ -56,6 +56,7 @@ public:
 
     void open(const Config& cfg);
     void close();
+    void back();
     bool isOpen() const;
     void applyTheme(const sdlgui::Theme& theme);
     void refreshLogsIfVisible();
@@ -107,6 +108,7 @@ private:
     sdlgui::Button*   newProfile_ = nullptr;
     sdlgui::Button*   deleteProfile_ = nullptr;
     sdlgui::Button*   saveProfile_ = nullptr;
+    sdlgui::Button*   back_ = nullptr;
     std::vector<ApiProfile> profiles_;
     std::string       activeProfileId_;
     //Profile name that was filled automatically from the catalog; used to
@@ -128,6 +130,8 @@ private:
     sdlgui::Label*    reasoningLabel_ = nullptr;
     sdlgui::DropDown* reasoningEffort_ = nullptr;
     std::vector<std::string> effortValues_;
+    sdlgui::Label*    protocolLabel_ = nullptr;
+    sdlgui::DropDown* protocol_ = nullptr;
     sdlgui::Button*   catalogButton_ = nullptr;
     std::unique_ptr<ModelCatalogDialog> catalogDialog_;
     std::unique_ptr<ApiUpdateDialog>    apiUpdateDialog_;
@@ -136,7 +140,9 @@ private:
     sdlgui::DropDown* theme_ = nullptr;
     sdlgui::DropDown* language_ = nullptr;
     sdlgui::CheckBox* showReasoning_ = nullptr;
+    sdlgui::Label*    fontSectionLabel_ = nullptr;
     sdlgui::Label*    fontSummary_ = nullptr;
+    sdlgui::Label*    fontHintLabel_ = nullptr;
     sdlgui::Button*   fontButton_ = nullptr;
     std::string       fontBackendValue_ = "ttf";
     std::string       fontPathValue_;
@@ -307,6 +313,8 @@ private:
     void updateDetails();
     void accept();
     void setMissingView(bool missing);
+    void layout();
+    void updatePage();
 
     Modal*  modal_ = nullptr;
     Panel*  panel_ = nullptr;
@@ -323,9 +331,14 @@ private:
     sdlgui::Button*  updateApi_ = nullptr;
     sdlgui::Button*  cancel_ = nullptr;
     sdlgui::Button*  ok_ = nullptr;
+    sdlgui::Button*  back_ = nullptr;
     sdlgui::Label*   missingText_ = nullptr;
     sdlgui::Button*  missingFetch_ = nullptr;
     bool             missingMode_ = false;
+    bool             mobile_ = false;
+    int              page_ = 0; //0 = providers, 1 = models
+    int              panelW_ = 900;
+    int              panelH_ = 640;
 
     std::vector<int> providerRows_;
     std::vector<int> modelRows_;

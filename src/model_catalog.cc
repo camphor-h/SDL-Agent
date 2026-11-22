@@ -327,4 +327,15 @@ std::vector<std::string> reasoningEfforts(const std::string& modelId,
     return fallback ? fallback->efforts : out;
 }
 
+std::string protocolFromNpm(const std::string& npm)
+{
+    if (npm == "@ai-sdk/anthropic" ||
+        npm == "@ai-sdk/google-vertex/anthropic")
+        return "anthropic";
+    if (npm == "@ai-sdk/openai" || npm == "@ai-sdk/azure" ||
+        npm == "@ai-sdk/xai")
+        return "responses";
+    return "openai";
+}
+
 } //namespace sdlagent::catalog

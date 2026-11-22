@@ -130,6 +130,7 @@ ChatPanel::ChatPanel(sg::Widget* parent)
     setSplit(0.78f);
     setMinPaneSize(120);
     setDividerWidth(1);
+    setDividerHitWidth(8);
 
     view_ = addChild<ChatView>();
     view_->onLinkClick = [this](const std::string& href)
@@ -233,20 +234,14 @@ ChatPanel::ChatPanel(sg::Widget* parent)
                            8, 6, 8, 0);
     attachRow_->setVisible(false);
 
-    //Visible input box. The text area sits above a bottom strip that holds the
-    //attach and send buttons, so wrapped text never runs under them.
-    inputFrame_ = inputPanel_->addChild<Panel>();
-    inputFrame_->pos(8, 8)->sz(400, 80);
-    inputFrame_->setAnchors(sg::AnchorLeft | sg::AnchorTop |
-                                sg::AnchorRight | sg::AnchorBottom,
-                            8, 8, 8, 34);
-    inputFrame_->setColors(sg::Color(24, 25, 29), sg::Color(58, 60, 66), 1);
-
-    input_ = inputFrame_->addChild<InputBox>();
-    input_->pos(5, 5)->sz(400, 80);
+    //Buttons float inside the input box; content insets keep text clear of
+    //the bottom-right corner.
+    input_ = inputPanel_->addChild<InputBox>();
+    input_->pos(8, 8)->sz(400, 80);
     input_->setAnchors(sg::AnchorLeft | sg::AnchorTop | sg::AnchorRight |
                            sg::AnchorBottom,
-                       5, 5, 5, 38);
+                       8, 8, 8, 34);
+    input_->setContentInsets(5, 5, 5, 44);
     input_->setWordWrap(true);
     input_->setLineSpacing(2);
     input_->scrollbarH(false);
@@ -278,9 +273,9 @@ ChatPanel::ChatPanel(sg::Widget* parent)
         }
     };
 
-    attachButton_ = inputFrame_->addChild<GlyphButton>();
+    attachButton_ = inputPanel_->addChild<GlyphButton>();
     attachButton_->pos(0, 0)->sz(30, 30);
-    attachButton_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 64, 7);
+    attachButton_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 72, 41);
     attachButton_->setGlyph(GlyphButton::Glyph::Plus);
     attachButton_->onClick = [this](sg::MouseEvent&) { openFileDialog(); };
 
@@ -292,16 +287,17 @@ ChatPanel::ChatPanel(sg::Widget* parent)
     hint_->setTextColor(sg::Color(150, 153, 160));
 
     usageLabel_ = inputPanel_->addChild<sg::Label>();
-    usageLabel_->pos(0, 0)->sz(80, 18);
+    usageLabel_->pos(0, 0)->sz(160, 18);
     usageLabel_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 14, 14);
+    usageLabel_->setTextAlign(sg::RichTextAlign::Right);
     usageLabel_->setText("");
     usageLabel_->setTextColor(sg::Color(150, 153, 160));
     usageLabel_->setVisible(false);
 
     //Golden-ratio rectangle (48 x 30) with the return symbol.
-    send_ = inputFrame_->addChild<GlyphButton>();
+    send_ = inputPanel_->addChild<GlyphButton>();
     send_->pos(0, 0)->sz(48, 30);
-    send_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 8, 7);
+    send_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 16, 41);
     send_->setGlyph(GlyphButton::Glyph::Return);
     send_->onClick = [this](sg::MouseEvent&)
     {
@@ -309,9 +305,9 @@ ChatPanel::ChatPanel(sg::Widget* parent)
             onSend(input_->text());
     };
 
-    stop_ = inputFrame_->addChild<sg::Button>();
+    stop_ = inputPanel_->addChild<sg::Button>();
     stop_->pos(0, 0)->sz(48, 30);
-    stop_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 8, 7);
+    stop_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 16, 41);
     stop_->setText(tr().stop);
     stop_->setVisible(false);
     stop_->onClick = [this](sg::MouseEvent&)
@@ -456,12 +452,12 @@ void ChatPanel::rebuildAttachmentRow()
 
 void ChatPanel::updateComposerLayout()
 {
-    if (!inputFrame_)
+    if (!input_)
         return;
     int top = pending_.empty() ? 8 : 40;
-    inputFrame_->setAnchors(sg::AnchorLeft | sg::AnchorTop |
-                                sg::AnchorRight | sg::AnchorBottom,
-                            8, top, 8, 34);
+    input_->setAnchors(sg::AnchorLeft | sg::AnchorTop | sg::AnchorRight |
+                           sg::AnchorBottom,
+                       8, top, 8, 34);
     if (getWindow())
         getWindow()->requestRedraw();
 }
@@ -567,17 +563,10 @@ void ChatPanel::updateHint()
     if (!usageLabel_)
         return;
 
-    int usageW = usage.empty() ? 0 : textWidth(usage);
     usageLabel_->setText(usage);
     usageLabel_->setVisible(!usage.empty());
-    if (!usage.empty())
-    {
-        usageLabel_->setSize(usageW, 18);
-        usageLabel_->setAnchors(sg::AnchorRight | sg::AnchorBottom,
-                                0, 0, 14, 14);
-    }
     hint_->setAnchors(sg::AnchorLeft | sg::AnchorRight | sg::AnchorBottom,
-                      14, 0, usage.empty() ? 14 : 14 + usageW + 12, 14);
+                      14, 0, usage.empty() ? 14 : 14 + 160 + 12, 14);
 }
 
 void ChatPanel::setBusy(bool busy)
@@ -831,12 +820,10 @@ void ChatPanel::applyTheme(const sg::Theme& theme)
 
     if (inputPanel_)
         inputPanel_->setColors(theme.panelBg, theme.divider, 1);
-    if (inputFrame_)
-        inputFrame_->setColors(theme.inputBg, theme.inputBorder, 1);
     if (input_)
     {
         input_->setBackgroundColor(theme.inputBg);
-        input_->setBorderColor(theme.inputBg);
+        input_->setBorderColor(theme.inputBorder);
     }
     if (attachButton_)
     {

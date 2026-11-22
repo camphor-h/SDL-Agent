@@ -26,6 +26,7 @@ struct ApiProfile
     std::string apiKey;
     std::string model;
     std::string reasoningEffort; //empty = provider default
+    std::string apiProtocol = "openai"; //openai | responses | anthropic
     double      temperature = 0.0;
     int         contextTokens = 1048576;
     int         maxTokens = 524288;
@@ -37,6 +38,7 @@ struct Config
     std::string apiKey;
     std::string model;
     std::string reasoningEffort; //empty = provider default
+    std::string apiProtocol = "openai"; //openai | responses | anthropic
 
     double temperature = 0.0;
     int    contextTokens = 1048576;

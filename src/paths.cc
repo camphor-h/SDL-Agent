@@ -58,7 +58,18 @@ void ensureInit()
     gCatalog = gData / "api.json";
     gAttachments = gData / "attachments.json";
     gGateways = gData / "gateways.json";
-    gWorkspace = std::filesystem::current_path();
+    const char* platform = SDL_GetPlatform();
+    if (platform && std::strcmp(platform, "Android") == 0)
+    {
+        //The app's cwd is "/" on Android; keep tool paths inside app storage.
+        gWorkspace = gPref / "workspace";
+        std::error_code ec;
+        std::filesystem::create_directories(gWorkspace, ec);
+    }
+    else
+    {
+        gWorkspace = std::filesystem::current_path();
+    }
 }
 
 } //namespace
