@@ -10,6 +10,7 @@
 #include "dialogs.hpp"
 #include "font.hpp"
 #include "i18n.hpp"
+#include "ime.hpp"
 #include "log.hpp"
 #include "model_catalog.hpp"
 #include "paths.hpp"
@@ -22,6 +23,7 @@
 #include "version.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <ctime>
 #include <filesystem>
@@ -33,7 +35,6 @@
 namespace sdlagent
 {
 namespace sg = sdlgui;
-using ui::ConfirmDecision;
 
 namespace
 {
@@ -277,11 +278,13 @@ App::App(bool openSettingsOnStart, std::string initialSessionId)
             log::writef("%s", fontErr.c_str());
     }
 
-    agentEventType_ = SDL_RegisterEvents(4);
+    agentEventType_ = SDL_RegisterEvents(5);
     titleEventType_ = agentEventType_ ? agentEventType_ + 1 : 0;
     logEventType_ = agentEventType_ ? agentEventType_ + 2 : 0;
     cameraEventType_ = agentEventType_ ? agentEventType_ + 3 : 0;
+    imeEventType_ = agentEventType_ ? agentEventType_ + 4 : 0;
     camera::setEventType(cameraEventType_);
+    ime::setEventType(imeEventType_);
     engine_.setUserEventType(agentEventType_);
     gui_.onUserEvent = [this](const SDL_Event& ev)
     {
@@ -294,6 +297,8 @@ App::App(bool openSettingsOnStart, std::string initialSessionId)
             settingsDialog_->poll();
         else if (cameraEventType_ && ev.type == cameraEventType_)
             handleCameraResult();
+        else if (imeEventType_ && ev.type == imeEventType_)
+            handleImeInset();
     };
     if (logEventType_)
         logTimer_ = SDL_AddTimer(200, &App::logTimerProc, this);
@@ -569,16 +574,8 @@ void App::buildUi()
         if (!engine_.busy())
             return;
 
-        if (choice == ui::ChatPanel::ConfirmChoice::Stop)
-        {
-            engine_.cancel();
-            engine_.resolveConfirmation(false);
-        }
-        else
-        {
-            engine_.resolveConfirmation(
-                choice == ui::ChatPanel::ConfirmChoice::Allow);
-        }
+        engine_.resolveConfirmation(
+            choice == ui::ChatPanel::ConfirmChoice::Allow);
 
         if (chat_)
             chat_->clearConfirmation();
@@ -610,17 +607,7 @@ void App::buildDialogs()
 {
     sg::Widget& root = win_->root();
 
-    settingsDialog_ = std::make_unique<ui::SettingsDialog>(
-        &root, win_,
-        [this](const Config& cfg, std::string& err)
-        { return saveConfigFromDialog(cfg, err); },
-        [this](const std::string& themeName) { applyTheme(themeName); },
-        [this]
-        {
-            //Revert any unsaved theme preview.
-            applyTheme();
-            gui_.setFocus(chat_ ? chat_->inputWidget() : nullptr);
-        });
+    createSettingsDialog();
 
     inputDialog_ = std::make_unique<ui::InputDialog>(
         &root,
@@ -1299,6 +1286,24 @@ void App::handleCameraResult()
     gui_.setFocus(chat_->inputWidget());
 }
 
+void App::handleImeInset()
+{
+    int px = 0;
+    if (!ime::takeInset(px))
+        return;
+
+    //The inset arrives in physical pixels; SDLGui lays widgets out in logical
+    //units, so divide by the UI scale.
+    float scale = gui_.uiScale();
+    if (scale < 0.01f)
+        scale = 1.0f;
+
+    int logical = (int)std::lround((double)px / (double)scale);
+    gui_.setKeyboardInset(logical);
+    if (win_)
+        win_->requestRedraw();
+}
+
 void App::updateUsageUi()
 {
     if (!chat_)
@@ -1689,8 +1694,30 @@ void App::openSettings()
 {
     if (!settingsDialog_)
         return;
+
+    //Rows are laid out from the current font metrics; rebuild after a font or
+    //scale change so labels and fields keep fitting.
+    if (settingsFontEpoch_ != sg::fontEpoch())
+        createSettingsDialog();
+
     settingsDialog_->open(config_);
     gui_.setFocus(settingsDialog_->firstField());
+}
+
+void App::createSettingsDialog()
+{
+    settingsDialog_ = std::make_unique<ui::SettingsDialog>(
+        &win_->root(), win_,
+        [this](const Config& cfg, std::string& err)
+        { return saveConfigFromDialog(cfg, err); },
+        [this](const std::string& themeName) { applyTheme(themeName); },
+        [this]
+        {
+            //Revert any unsaved theme preview.
+            applyTheme();
+            gui_.setFocus(chat_ ? chat_->inputWidget() : nullptr);
+        });
+    settingsFontEpoch_ = sg::fontEpoch();
 }
 
 bool App::saveConfigFromDialog(const Config& cfg, std::string& err)

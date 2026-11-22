@@ -182,7 +182,6 @@ struct Strings
     const char* confirmTitle;
     const char* allow;
     const char* deny;
-    const char* stopRun;
     const char* renameTitle;
     const char* deleteTitle;
     const char* deleteConfirm;

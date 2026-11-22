@@ -796,6 +796,8 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
                 if (cancel_.load(std::memory_order_relaxed))
                 {
                     cancelled = true;
+                    result.ok = false;
+                    result.output = tr().toolInterrupted;
                 }
                 else if (!allowed)
                 {

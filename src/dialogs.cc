@@ -26,11 +26,25 @@ namespace sg = sdlgui;
 namespace
 {
 
+//Height of one text line for the current font. The dialogs were originally
+//laid out around an 18px line box, so keep that as the floor.
+int textLineH()
+{
+    sg::Font* f = sg::currentFont();
+    return std::max(18, f ? f->lineHeight() : 18);
+}
+
+//Editable field height: text line plus vertical padding (30px at 18px).
+int fieldH()
+{
+    return std::max(30, textLineH() + 12);
+}
+
 sg::Label* addLabel(sg::Widget* parent, int x, int y, int w,
                     const std::string& text, sg::Color color)
 {
     sg::Label* l = parent->addChild<sg::Label>();
-    l->pos(x, y)->sz(w, 18);
+    l->pos(x, y)->sz(w, textLineH());
     l->setText(text);
     l->setTextColor(color);
     return l;
@@ -39,7 +53,7 @@ sg::Label* addLabel(sg::Widget* parent, int x, int y, int w,
 sg::TextBox* addTextBox(sg::Widget* parent, int x, int y, int w, int h = 30)
 {
     sg::TextBox* tb = parent->addChild<sg::TextBox>();
-    tb->pos(x, y)->sz(w, h);
+    tb->pos(x, y)->sz(w, std::max(h, fieldH()));
     return tb;
 }
 
@@ -297,23 +311,29 @@ void SettingsDialog::build(sg::Widget* root)
     makePage(aboutScroll_, aboutContent_, 460);
 
     //Configuration form
+    const int lh = textLineH();
+    const int fh = fieldH();
+    const int labelGap = 4;
+    const int rowGap = 10;
+    const int checkH = std::max(24, lh + 6);
+    const int editH = std::max(26, lh + 4);
     int y = 0;
     addLabel(formContent_, 0, y, 200, tr().profileName,
              sg::Color(200, 203, 210));
-    profileName_ = addTextBox(formContent_, 0, y + 22, 800);
-    y += 62;
+    profileName_ = addTextBox(formContent_, 0, y + lh + labelGap, 800);
+    y += lh + labelGap + fh + rowGap;
 
     addLabel(formContent_, 0, y, 200, tr().apiUrl, sg::Color(200, 203, 210));
-    baseUrl_ = addTextBox(formContent_, 0, y + 22, 800);
-    y += 62;
+    baseUrl_ = addTextBox(formContent_, 0, y + lh + labelGap, 800);
+    y += lh + labelGap + fh + rowGap;
 
     addLabel(formContent_, 0, y, 200, tr().apiKey, sg::Color(200, 203, 210));
-    apiKey_ = addTextBox(formContent_, 0, y + 22, 800);
+    apiKey_ = addTextBox(formContent_, 0, y + lh + labelGap, 800);
     apiKey_->setPassword(true);
-    y += 62;
+    y += lh + labelGap + fh + rowGap;
 
     addLabel(formContent_, 0, y, 200, tr().model, sg::Color(200, 203, 210));
-    model_ = addTextBox(formContent_, 0, y + 22, 400);
+    model_ = addTextBox(formContent_, 0, y + lh + labelGap, 400);
 
     catalogButton_ = formContent_->addChild<sg::Button>();
     catalogButton_->pos(0, y)->sz(220, 28);
@@ -358,36 +378,39 @@ void SettingsDialog::build(sg::Widget* root)
                 }
             });
     };
-    y += 60;
+    y += lh + labelGap + fh + 8;
 
     contextTokensLabel_ = addLabel(formContent_, 0, y, 220, tr().contextTokens,
                                    sg::Color(200, 203, 210));
     maxTokensLabel_ = addLabel(formContent_, 340, y, 220, tr().maxTokens,
                                sg::Color(200, 203, 210));
-    contextTokens_ = addTextBox(formContent_, 0, y + 22, 260);
-    maxTokens_ = addTextBox(formContent_, 340, y + 22, 260);
-    y += 62;
+    contextTokens_ = addTextBox(formContent_, 0, y + lh + labelGap, 260);
+    maxTokens_ = addTextBox(formContent_, 340, y + lh + labelGap, 260);
+    y += lh + labelGap + fh + rowGap;
 
     reasoningLabel_ = addLabel(formContent_, 0, y, 220, tr().reasoningEffort,
                                sg::Color(200, 203, 210));
     reasoningEffort_ = formContent_->addChild<sg::DropDown>();
-    reasoningEffort_->pos(0, y + 22)->sz(260, 30);
-    y += 62;
+    reasoningEffort_->pos(0, y + lh + labelGap)->sz(260, fh);
+    y += lh + labelGap + fh + rowGap;
 
     protocolLabel_ = addLabel(formContent_, 0, y, 220, tr().apiProtocol,
                               sg::Color(200, 203, 210));
     protocol_ = formContent_->addChild<sg::DropDown>();
-    protocol_->pos(0, y + 22)->sz(260, 30);
+    protocol_->pos(0, y + lh + labelGap)->sz(260, fh);
     protocol_->addItem("OpenAI Chat");
     protocol_->addItem("OpenAI Responses");
     protocol_->addItem("Anthropic");
+
+    formContent_->setSize(800, y + lh + labelGap + fh + 24);
+    formScroll_->setContentSize(800, y + lh + labelGap + fh + 24);
 
     //Appearance page
     y = 0;
     addLabel(appearanceContent_, 0, y, 200, tr().theme,
              sg::Color(200, 203, 210));
     theme_ = appearanceContent_->addChild<sg::DropDown>();
-    theme_->pos(0, y + 22)->sz(180, 30);
+    theme_->pos(0, y + lh + labelGap)->sz(180, fh);
     theme_->addItem(tr().themeDark);
     theme_->addItem(tr().themeLight);
     theme_->onItemSelected = [this](int index)
@@ -399,29 +422,29 @@ void SettingsDialog::build(sg::Widget* root)
     addLabel(appearanceContent_, 220, y, 200, tr().language,
              sg::Color(200, 203, 210));
     language_ = appearanceContent_->addChild<sg::DropDown>();
-    language_->pos(220, y + 22)->sz(180, 30);
+    language_->pos(220, y + lh + labelGap)->sz(180, fh);
     language_->addItem(tr().languageZh);
     language_->addItem(tr().languageEn);
-    addLabel(appearanceContent_, 420, y + 28, 360, tr().languageHint,
-             sg::Color(135, 138, 145));
-    y += 60;
+    addLabel(appearanceContent_, 420, y + lh + labelGap + 6, 360,
+             tr().languageHint, sg::Color(135, 138, 145));
+    y += lh + labelGap + fh + 8;
 
     showReasoning_ = appearanceContent_->addChild<sg::CheckBox>();
-    showReasoning_->pos(0, y)->sz(320, 24);
+    showReasoning_->pos(0, y)->sz(320, checkH);
     showReasoning_->setText(tr().showReasoning);
-    y += 44;
+    y += checkH + 20;
 
     fontSectionLabel_ = addLabel(appearanceContent_, 0, y, 240,
                                  tr().fontSection,
                                  sg::Color(200, 203, 210));
-    y += 28;
+    y += lh + 10;
 
     fontSummary_ = addLabel(appearanceContent_, 0, y, 620, "",
                             sg::Color(150, 153, 160));
-    y += 30;
+    y += lh + 12;
 
     fontButton_ = appearanceContent_->addChild<sg::Button>();
-    fontButton_->pos(0, y)->sz(180, 32);
+    fontButton_->pos(0, y)->sz(180, std::max(32, lh + 10));
     fontButton_->setText(tr().fontSettings);
     fontButton_->onClick = [this](sg::MouseEvent&)
     {
@@ -437,10 +460,13 @@ void SettingsDialog::build(sg::Widget* root)
                 updateFontSummary();
             });
     };
-    y += 46;
+    y += std::max(32, lh + 10) + 14;
 
     fontHintLabel_ = addLabel(appearanceContent_, 0, y, 620,
                               tr().fontHint, sg::Color(135, 138, 145));
+
+    appearanceContent_->setSize(800, y + lh + 24);
+    appearanceScroll_->setContentSize(800, y + lh + 24);
 
     if (paths::isMobile())
     {
@@ -454,9 +480,9 @@ void SettingsDialog::build(sg::Widget* root)
     y = 0;
     addLabel(customContent_, 0, y, 300, tr().sessionsDir,
              sg::Color(200, 203, 210));
-    sessions_ = addTextBox(customContent_, 0, y + 22, 650);
+    sessions_ = addTextBox(customContent_, 0, y + lh + labelGap, 650);
     pickSessions_ = customContent_->addChild<sg::Button>();
-    pickSessions_->pos(660, y + 22)->sz(100, 30);
+    pickSessions_->pos(660, y + lh + labelGap)->sz(100, fh);
     pickSessions_->setText(tr().browse);
     pickSessions_->onClick = [this](sg::MouseEvent&)
     {
@@ -468,7 +494,7 @@ void SettingsDialog::build(sg::Widget* root)
                                  start.c_str(), false);
     };
     openSessions_ = customContent_->addChild<sg::Button>();
-    openSessions_->pos(770, y + 22)->sz(100, 30);
+    openSessions_->pos(770, y + lh + labelGap)->sz(100, fh);
     openSessions_->setText(tr().openDir);
     openSessions_->onClick = [this](sg::MouseEvent&)
     {
@@ -477,13 +503,13 @@ void SettingsDialog::build(sg::Widget* root)
             dir = paths::defaultSessionsDir();
         SDL_OpenURL(fileUrl(dir).c_str());
     };
-    y += 62;
+    y += lh + labelGap + fh + rowGap;
 
     addLabel(customContent_, 0, y, 300, tr().configDir,
              sg::Color(200, 203, 210));
-    dataDir_ = addTextBox(customContent_, 0, y + 22, 650);
+    dataDir_ = addTextBox(customContent_, 0, y + lh + labelGap, 650);
     pickDataDir_ = customContent_->addChild<sg::Button>();
-    pickDataDir_->pos(660, y + 22)->sz(100, 30);
+    pickDataDir_->pos(660, y + lh + labelGap)->sz(100, fh);
     pickDataDir_->setText(tr().browse);
     pickDataDir_->onClick = [this](sg::MouseEvent&)
     {
@@ -497,7 +523,7 @@ void SettingsDialog::build(sg::Widget* root)
                                  start.c_str(), false);
     };
     openDataDir_ = customContent_->addChild<sg::Button>();
-    openDataDir_->pos(770, y + 22)->sz(100, 30);
+    openDataDir_->pos(770, y + lh + labelGap)->sz(100, fh);
     openDataDir_->setText(tr().openDir);
     openDataDir_->onClick = [this](sg::MouseEvent&)
     {
@@ -506,10 +532,11 @@ void SettingsDialog::build(sg::Widget* root)
             dir = paths::prefDir();
         SDL_OpenURL(fileUrl(dir).c_str());
     };
-    configDirLabel_ = addLabel(customContent_, 0, y + 58, 650,
+    configDirLabel_ = addLabel(customContent_, 0,
+                               y + lh + labelGap + fh + 6, 650,
                                tr().configDirHint,
                                sg::Color(135, 138, 145));
-    y += 86;
+    y += lh + labelGap + fh + 6 + lh + 10;
 
     addLabel(customContent_, 0, y, 110, "config.json",
              sg::Color(200, 203, 210));
@@ -517,66 +544,69 @@ void SettingsDialog::build(sg::Widget* root)
                                 paths::toUtf8(paths::configFile()),
                                 sg::Color(135, 138, 145));
     openConfig_ = customContent_->addChild<sg::Button>();
-    openConfig_->pos(770, y - 4)->sz(100, 26);
+    openConfig_->pos(770, y - 4)->sz(100, editH);
     openConfig_->setText(tr().edit);
     openConfig_->onClick = [](sg::MouseEvent&)
     {
         SDL_OpenURL(fileUrl(paths::configFile()).c_str());
     };
-    y += 36;
+    y += lh + 18;
 
     addLabel(customContent_, 0, y, 200, tr().toolMode,
              sg::Color(200, 203, 210));
     toolMode_ = customContent_->addChild<sg::DropDown>();
-    toolMode_->pos(0, y + 22)->sz(230, 30);
+    toolMode_->pos(0, y + lh + labelGap)->sz(230, fh);
     toolMode_->addItem(tr().toolsAuto);
     toolMode_->addItem(tr().toolsAsk);
     toolMode_->addItem(tr().toolsOff);
-    y += 62;
+    y += lh + labelGap + fh + rowGap;
 
     autoTitle_ = customContent_->addChild<sg::CheckBox>();
-    autoTitle_->pos(0, y)->sz(360, 24);
+    autoTitle_->pos(0, y)->sz(360, checkH);
     autoTitle_->setText(tr().autoTitle);
-    y += 44;
+    y += checkH + 20;
 
     addLabel(customContent_, 0, y, 380, tr().promptFiles,
              sg::Color(200, 203, 210));
-    y += 24;
+    y += lh + 6;
 
     sysPath_ = addLabel(customContent_, 0, y, 650,
                         paths::toUtf8(paths::sysPromptFile()),
                         sg::Color(135, 138, 145));
     editSys_ = customContent_->addChild<sg::Button>();
-    editSys_->pos(660, y - 4)->sz(134, 26);
+    editSys_->pos(660, y - 4)->sz(134, editH);
     editSys_->setText(tr().edit);
     editSys_->onClick = [](sg::MouseEvent&)
     {
         SDL_OpenURL(fileUrl(paths::sysPromptFile()).c_str());
     };
-    y += 32;
+    y += lh + 14;
 
     toolPath_ = addLabel(customContent_, 0, y, 650,
                          paths::toUtf8(paths::toolPromptFile()),
                          sg::Color(135, 138, 145));
     editTool_ = customContent_->addChild<sg::Button>();
-    editTool_->pos(660, y - 4)->sz(134, 26);
+    editTool_->pos(660, y - 4)->sz(134, editH);
     editTool_->setText(tr().edit);
     editTool_->onClick = [](sg::MouseEvent&)
     {
         SDL_OpenURL(fileUrl(paths::toolPromptFile()).c_str());
     };
-    y += 32;
+    y += lh + 14;
 
     titlePath_ = addLabel(customContent_, 0, y, 650,
                           paths::toUtf8(paths::titlePromptFile()),
                           sg::Color(135, 138, 145));
     editTitle_ = customContent_->addChild<sg::Button>();
-    editTitle_->pos(660, y - 4)->sz(134, 26);
+    editTitle_->pos(660, y - 4)->sz(134, editH);
     editTitle_->setText(tr().edit);
     editTitle_->onClick = [](sg::MouseEvent&)
     {
         SDL_OpenURL(fileUrl(paths::titlePromptFile()).c_str());
     };
+
+    customContent_->setSize(800, y + lh + 24);
+    customScroll_->setContentSize(800, y + lh + 24);
 
     //About page: centered artwork, name, version, author and link.
     aboutImage_ = aboutContent_->addChild<ImageWidget>();
@@ -687,6 +717,8 @@ void SettingsDialog::layoutFields(int panelW, int)
 {
     int contentW = std::max(panelW < 640 ? 300 : 480,
                             panelW - 24 - 24 - 8);
+    const int lh = textLineH();
+    const int fh = fieldH();
 
     auto setPage = [&](sg::ScrollView* sv, sg::Widget* content, int height)
     {
@@ -694,15 +726,16 @@ void SettingsDialog::layoutFields(int panelW, int)
         sv->setContentSize(contentW, height);
     };
 
-    setPage(formScroll_, formContent_, 500);
-    setPage(appearanceScroll_, appearanceContent_, 440);
-    setPage(customScroll_, customContent_, 600);
+    setPage(formScroll_, formContent_, formContent_->height());
+    setPage(appearanceScroll_, appearanceContent_,
+            appearanceContent_->height());
+    setPage(customScroll_, customContent_, customContent_->height());
     setPage(aboutScroll_, aboutContent_, 460);
 
     if (profileName_)
-        profileName_->setSize(contentW, 30);
-    baseUrl_->setSize(contentW, 30);
-    apiKey_->setSize(contentW, 30);
+        profileName_->setSize(contentW, fh);
+    baseUrl_->setSize(contentW, fh);
+    apiKey_->setSize(contentW, fh);
     int modelW = std::min(400, contentW);
     int catalogW = 220;
     if (contentW < 560)
@@ -716,7 +749,7 @@ void SettingsDialog::layoutFields(int panelW, int)
     {
         catalogButton_->setText(tr().selectFromCatalog);
     }
-    model_->setSize(modelW, 30);
+    model_->setSize(modelW, fh);
 
     if (maxTokensLabel_)
         maxTokensLabel_->setPosition(0, maxTokensLabel_->y());
@@ -724,55 +757,55 @@ void SettingsDialog::layoutFields(int panelW, int)
     {
         int half = std::max(160, (contentW - 20) / 2);
         int col2 = half + 20;
-        contextTokens_->setSize(half, 30);
+        contextTokens_->setSize(half, fh);
         if (contextTokensLabel_)
             contextTokensLabel_->setPosition(0, contextTokensLabel_->y());
         if (maxTokensLabel_)
             maxTokensLabel_->setPosition(col2, maxTokensLabel_->y());
         maxTokens_->setPosition(col2, maxTokens_->y());
-        maxTokens_->setSize(half, 30);
+        maxTokens_->setSize(half, fh);
     }
     if (catalogButton_)
     {
         catalogButton_->setPosition(std::max(0, contentW - catalogW),
                                     catalogButton_->y());
-        catalogButton_->setSize(catalogW, 28);
+        catalogButton_->setSize(catalogW, std::max(28, lh + 6));
     }
 
     if (fontSummary_)
-        fontSummary_->setSize(contentW, 18);
+        fontSummary_->setSize(contentW, lh);
 
     int pathW = std::max(200, contentW - 240);
-    sessions_->setSize(pathW, 30);
+    sessions_->setSize(pathW, fh);
     if (pickSessions_)
         pickSessions_->setPosition(contentW - 230, pickSessions_->y());
     if (openSessions_)
         openSessions_->setPosition(contentW - 120, openSessions_->y());
 
     if (configDirLabel_)
-        configDirLabel_->setSize(std::max(200, contentW - 120), 18);
+        configDirLabel_->setSize(std::max(200, contentW - 120), lh);
     if (dataDir_)
-        dataDir_->setSize(pathW, 30);
+        dataDir_->setSize(pathW, fh);
     if (pickDataDir_)
         pickDataDir_->setPosition(contentW - 230, pickDataDir_->y());
     if (openDataDir_)
         openDataDir_->setPosition(contentW - 120, openDataDir_->y());
 
     if (configFileLabel_)
-        configFileLabel_->setSize(std::max(160, contentW - 236), 18);
+        configFileLabel_->setSize(std::max(160, contentW - 236), lh);
     if (openConfig_)
         openConfig_->setPosition(contentW - 120, openConfig_->y());
 
     if (sysPath_)
-        sysPath_->setSize(std::max(200, contentW - 160), 18);
+        sysPath_->setSize(std::max(200, contentW - 160), lh);
     if (editSys_)
         editSys_->setPosition(contentW - 140, editSys_->y());
     if (toolPath_)
-        toolPath_->setSize(std::max(200, contentW - 160), 18);
+        toolPath_->setSize(std::max(200, contentW - 160), lh);
     if (editTool_)
         editTool_->setPosition(contentW - 140, editTool_->y());
     if (titlePath_)
-        titlePath_->setSize(std::max(200, contentW - 160), 18);
+        titlePath_->setSize(std::max(200, contentW - 160), lh);
     if (editTitle_)
         editTitle_->setPosition(contentW - 140, editTitle_->y());
 
@@ -786,20 +819,25 @@ void SettingsDialog::layoutFields(int panelW, int)
         aboutImage_->setSize(imgW, imgH);
         y += imgH + 20;
 
-        auto place = [&](sg::Label* label, int height)
+        auto place = [&](sg::Label* label, int gapAfter)
         {
             if (!label)
                 return;
+            int h = label->preferredHeight(contentW);
             label->setPosition(0, y);
-            label->setSize(contentW, height);
-            y += height + 8;
+            label->setSize(contentW, h);
+            y += h + gapAfter;
         };
 
-        place(aboutTitle_, 28);
-        place(aboutVersion_, 20);
-        y += 10;
-        place(aboutAuthor_, 22);
-        place(aboutLink_, 22);
+        place(aboutTitle_, 12);
+        place(aboutVersion_, 10);
+        y += 6;
+        place(aboutAuthor_, 10);
+        place(aboutLink_, 8);
+
+        int aboutH = std::max(460, y + 24);
+        aboutContent_->setSize(contentW, aboutH);
+        aboutScroll_->setContentSize(contentW, aboutH);
     }
 
     int mx = 40;
@@ -1650,17 +1688,6 @@ ConfirmDialog::ConfirmDialog(sg::Widget* root, std::function<void()> onClosed)
         return b;
     };
 
-    stop_ = addButton(24, 260, tr().stopRun);
-    stop_->setTextColor(sg::Color(230, 100, 100));
-    stop_->onClick = [this](sg::MouseEvent&)
-    {
-        modal_->hideModal();
-        auto cb = std::move(onDecision_);
-        onDecision_ = nullptr;
-        if (cb) cb(ConfirmDecision::Stop);
-        if (onClosed_) onClosed_();
-    };
-
     deny_ = addButton(24, 218, tr().deny);
     deny_->onClick = [this](sg::MouseEvent&)
     {
@@ -1692,7 +1719,7 @@ void ConfirmDialog::layoutPanel(int w, int h)
     const int btnH = 32;
     const int gap = 8;
     const int bottom = 16;
-    const int stack = btnH * 3 + gap * 2;
+    const int stack = btnH * 2 + gap;
     const int stackY = h - bottom - stack;
 
     if (title_)
@@ -1717,7 +1744,6 @@ void ConfirmDialog::layoutPanel(int w, int h)
 
     place(allow_, stackY);
     place(deny_, stackY + btnH + gap);
-    place(stop_, stackY + (btnH + gap) * 2);
 }
 
 void ConfirmDialog::open(const ConfirmationRequestView& request,

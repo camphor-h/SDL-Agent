@@ -202,12 +202,6 @@ ChatPanel::ChatPanel(sg::Widget* parent)
                 onConfirmation(ConfirmChoice::Deny);
             return;
         }
-        if (href == "confirm:stop")
-        {
-            if (onConfirmation)
-                onConfirmation(ConfirmChoice::Stop);
-            return;
-        }
         if (!href.empty())
             SDL_OpenURL(href.c_str());
     };
@@ -245,6 +239,27 @@ ChatPanel::ChatPanel(sg::Widget* parent)
     input_->setWordWrap(true);
     input_->setLineSpacing(2);
     input_->scrollbarH(false);
+
+#if defined(__ANDROID__)
+    //SDLGui starts text input only when focus changes. After the IME is
+    //dismissed with Back, tapping the still-focused editor has to ask for the
+    //keyboard again.
+    {
+        auto baseDown = input_->onMouseDown;
+        input_->onMouseDown = [this, baseDown](sg::MouseEvent& e)
+        {
+            if (baseDown)
+                baseDown(e);
+            if (!input_)
+                return;
+            if (sg::Window* win = input_->getWindow())
+            {
+                if (win->handle())
+                    SDL_StartTextInput(win->handle());
+            }
+        };
+    }
+#endif
 
     //Enter sends, Shift+Enter inserts a newline.
     input_->keyMap().remove(sg::TextEditAction::InsertNewline);
@@ -295,6 +310,7 @@ ChatPanel::ChatPanel(sg::Widget* parent)
 
     hint_ = inputPanel_->addChild<sg::Label>();
     hint_->pos(14, 18)->sz(420, 18);
+    hint_->setAutoHeight(true);
     hint_->setAnchors(sg::AnchorLeft | sg::AnchorRight | sg::AnchorBottom,
                       14, 0, 14, 14);
     hint_->setText("");
@@ -302,6 +318,7 @@ ChatPanel::ChatPanel(sg::Widget* parent)
 
     usageLabel_ = inputPanel_->addChild<sg::Label>();
     usageLabel_->pos(0, 0)->sz(160, 18);
+    usageLabel_->setAutoHeight(true);
     usageLabel_->setAnchors(sg::AnchorRight | sg::AnchorBottom, 0, 0, 14, 14);
     usageLabel_->setTextAlign(sg::RichTextAlign::Right);
     usageLabel_->setText("");
@@ -654,7 +671,8 @@ void ChatPanel::buildConfirmation(std::vector<sg::RichTextBlock>& blocks) const
     sg::RichTextBlock actions;
     actions.type = sg::RichBlockType::Actions;
     actions.actionsVertical = true;
-    actions.actionHeight = 34;
+    actions.actionHeight =
+        std::max(34, (sg::currentFont() ? sg::currentFont()->lineHeight() : 18) + 8);
     actions.actionGap = 6;
     actions.paddingX = 0;
     actions.marginTop = 4;
@@ -678,7 +696,6 @@ void ChatPanel::buildConfirmation(std::vector<sg::RichTextBlock>& blocks) const
 
     addAction(tr().allow, ConfirmChoice::Allow);
     addAction(tr().deny, ConfirmChoice::Deny);
-    addAction(tr().stopRun, ConfirmChoice::Stop);
     card.children.push_back(std::move(actions));
     blocks.push_back(std::move(card));
 }

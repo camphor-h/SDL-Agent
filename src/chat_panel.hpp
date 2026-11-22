@@ -50,7 +50,7 @@ public:
     }
     void clearAttachments();
 
-    enum class ConfirmChoice { Allow, Deny, Stop };
+    enum class ConfirmChoice { Allow, Deny };
 
     void setConfirmation(const std::string& tool, const std::string& summary,
                          const std::string& detail);
@@ -103,13 +103,6 @@ private:
     std::string          confirmTool_;
     std::string          confirmSummary_;
     std::string          confirmDetail_;
-    Panel*               confirmPanel_ = nullptr;
-    sdlgui::Label*       confirmTitle_ = nullptr;
-    sdlgui::Label*       confirmSummaryLabel_ = nullptr;
-    sdlgui::Label*       confirmDetailLabel_ = nullptr;
-    sdlgui::Button*      confirmAllow_ = nullptr;
-    sdlgui::Button*      confirmDeny_ = nullptr;
-    sdlgui::Button*      confirmStop_ = nullptr;
     sdlgui::Color        accentColor_{ 88, 150, 230, 255 };
     sdlgui::Color        mutedColor_{ 150, 153, 160, 255 };
     sdlgui::Color        userBubbleBg_{ 44, 52, 66, 255 };

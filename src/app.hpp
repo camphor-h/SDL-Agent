@@ -63,6 +63,7 @@ private:
 
     void onAgentEvents();
     void handleCameraResult();
+    void handleImeInset();
     void handleAgentEvent(const AgentEvent& ev, bool& refresh, bool& force);
     void setBusyUi(bool busy);
     void showStatus(const std::string& text);
@@ -76,6 +77,7 @@ private:
     void processTitleResults();
 
     void openSettings();
+    void createSettingsDialog();
     bool saveConfigFromDialog(const Config& cfg, std::string& err);
 
     void toggleSidebar();
@@ -101,6 +103,8 @@ private:
     uint32_t titleEventType_ = 0;
     uint32_t logEventType_ = 0;
     uint32_t cameraEventType_ = 0;
+    uint32_t imeEventType_ = 0;
+    uint64_t settingsFontEpoch_ = 0;
     SDL_TimerID logTimer_ = 0;
 
     ui::Panel*       sidebar_ = nullptr;

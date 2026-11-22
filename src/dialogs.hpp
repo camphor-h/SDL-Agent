@@ -32,8 +32,7 @@ class ConfirmDialog;
 enum class ConfirmDecision
 {
     Allow,
-    Deny,
-    Stop
+    Deny
 };
 
 struct ConfirmationRequestView
@@ -234,7 +233,6 @@ private:
     sdlgui::Label*    title_ = nullptr;
     sdlgui::Label*    summary_ = nullptr;
     sdlgui::TextArea* detail_ = nullptr;
-    sdlgui::Button*   stop_ = nullptr;
     sdlgui::Button*   deny_ = nullptr;
     sdlgui::Button*   allow_ = nullptr;
     std::function<void(ConfirmDecision)> onDecision_;

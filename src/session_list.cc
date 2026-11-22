@@ -14,8 +14,8 @@ namespace sg = sdlgui;
 namespace
 {
 constexpr int kPaddingTop = 4;
-constexpr int kHeaderH = 28;
-constexpr int kRowH = 38;
+constexpr int kHeaderMinH = 28;
+constexpr int kRowMinH = 38;
 constexpr int kSepH = 11;
 }
 
@@ -118,6 +118,9 @@ void SessionList::rebuild()
         (it.pinned ? pinned : normal).push_back(&it);
 
     int y = kPaddingTop;
+    int lineH = sg::currentFont() ? sg::currentFont()->lineHeight() : 16;
+    int headerH = std::max(kHeaderMinH, lineH + 10);
+    int rowH = std::max(kRowMinH, lineH + 15);
 
     auto addHeader = [&](const char* text)
     {
@@ -125,9 +128,9 @@ void SessionList::rebuild()
         r.type = Row::Type::Header;
         r.text = text;
         r.y = y;
-        r.h = kHeaderH;
+        r.h = headerH;
         rows_.push_back(std::move(r));
-        y += kHeaderH;
+        y += headerH;
     };
 
     auto addSession = [&](const SessionListItem& item)
@@ -138,9 +141,9 @@ void SessionList::rebuild()
         r.text = item.title.empty() ? tr().untitled : item.title;
         r.pinned = item.pinned;
         r.y = y;
-        r.h = kRowH;
+        r.h = rowH;
         rows_.push_back(std::move(r));
-        y += kRowH;
+        y += rowH;
     };
 
     if (!pinned.empty())
@@ -247,7 +250,8 @@ void SessionList::onRender(SDL_Renderer* renderer)
 
         if (row.type == Row::Type::Header)
         {
-            drawClipped(renderer, row.text, r.x + 12, y + 5,
+            drawClipped(renderer, row.text, r.x + 12,
+                        y + (row.h - lineH) / 2,
                         std::max(0, r.w - 24), mutedColor_);
             continue;
         }
