@@ -82,8 +82,7 @@ private:
     bool saveConfigFromDialog(const Config& cfg, std::string& err);
 
     void toggleSidebar();
-    void togglePin(const std::string& id);
-    void renameSession(const std::string& id);
+    void togglePin(const std::string& id);    void renameSession(const std::string& id);
     void exportSession(const std::string& id);
     //Loads messages for an operation; drops the entry when the file is gone.
     bool loadSessionForAction(const std::string& id);
@@ -105,13 +104,14 @@ private:
     uint32_t logEventType_ = 0;
     uint32_t cameraEventType_ = 0;
     uint32_t imeEventType_ = 0;
-    uint64_t settingsFontEpoch_ = 0;
+    int settingsLineHeight_ = 0;
     SDL_TimerID logTimer_ = 0;
 
     ui::Panel*       sidebar_ = nullptr;
     ui::SessionList* sessionList_ = nullptr;
     sdlgui::SplitView* mainSplit_ = nullptr;
     sdlgui::Drawer*    drawer_ = nullptr;
+    ui::ArrowButton*   drawerTab_ = nullptr;
     bool               phoneUI_ = false;
     ui::Panel*       sidebarTopbar_ = nullptr;
     sdlgui::Button*  newChatButton_ = nullptr;

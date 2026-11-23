@@ -593,13 +593,37 @@ void App::buildUi()
         drawer_->setSide(sg::Drawer::Side::Left);
         drawer_->setPanelWidth(
             std::max(240, std::min(320, root.width() - 56)));
-        drawer_->setCloseButtonVisible(true);
+        drawer_->setCloseButtonVisible(false);
 
         sidebar_->reparent(drawer_->panel());
         sidebar_->setPosition(0, 0);
         sidebar_->setAnchors(sg::AnchorLeft | sg::AnchorTop |
                                  sg::AnchorRight | sg::AnchorBottom,
                              0, 0, 0, 0);
+
+        //A square pull-tab attached to the right edge of the drawer; the
+        //built-in X is too small and its meaning is ambiguous on touch.
+        drawerTab_ = root.addChild<ui::ArrowButton>();
+        drawerTab_->setDirection(ui::ArrowButton::Direction::Right);
+        drawerTab_->pos(drawer_->panelWidth(), 12)->sz(36, 36);
+        drawerTab_->setVisible(false);
+        drawerTab_->onClick = [this](sg::MouseEvent&)
+        {
+            if (drawer_)
+                drawer_->close();
+            if (win_)
+                win_->requestRedraw();
+        };
+        drawer_->onOpenChanged = [this](bool open)
+        {
+            if (drawerTab_)
+            {
+                drawerTab_->setVisible(open);
+                drawerTab_->setPosition(drawer_->panelWidth(), 12);
+            }
+            if (win_)
+                win_->requestRedraw();
+        };
     }
 }
 
@@ -635,6 +659,10 @@ void App::applyTheme(const std::string& themeName)
         drawer_->setPanelColor(theme.panelBg);
         drawer_->setScrimColor(sg::Color(0, 0, 0, 60));
     }
+    if (drawerTab_)
+        drawerTab_->setColors(theme.panelBg, theme.buttonHover,
+                              theme.buttonPressed, theme.text,
+                              sg::Color(0, 0, 0, 255));
     if (sidebar_)
         sidebar_->setColors(theme.panelBg, theme.panelBorder, 0);
     if (contentTopbar_)
@@ -1739,13 +1767,21 @@ void App::openSettings()
     if (!settingsDialog_)
         return;
 
-    //Rows are laid out from the current font metrics; rebuild after a font or
-    //scale change so labels and fields keep fitting.
-    if (settingsFontEpoch_ != sg::fontEpoch())
+    int lineH = sg::currentFont() ? sg::currentFont()->lineHeight() : 0;
+    //Rows are laid out from the font line height; rebuild when it changes.
+    if (settingsLineHeight_ != lineH)
+    {
         createSettingsDialog();
+        //The constructor starts from dark defaults; apply the active theme
+        //before the rebuilt dialog is shown.
+        applyTheme();
+    }
 
     settingsDialog_->open(config_);
-    gui_.setFocus(settingsDialog_->firstField());
+    if (paths::isMobile())
+        gui_.setFocus(nullptr);
+    else
+        gui_.setFocus(settingsDialog_->firstField());
 }
 
 void App::createSettingsDialog()
@@ -1759,9 +1795,15 @@ void App::createSettingsDialog()
         {
             //Revert any unsaved theme preview.
             applyTheme();
-            gui_.setFocus(chat_ ? chat_->inputWidget() : nullptr);
+            //Do not focus the composer here on mobile: a programmatic focus
+            //starts text input and makes the IME flash on the way out.
+            if (paths::isMobile())
+                gui_.setFocus(nullptr);
+            else
+                gui_.setFocus(chat_ ? chat_->inputWidget() : nullptr);
         });
-    settingsFontEpoch_ = sg::fontEpoch();
+    settingsLineHeight_ =
+        sg::currentFont() ? sg::currentFont()->lineHeight() : 0;
 }
 
 bool App::saveConfigFromDialog(const Config& cfg, std::string& err)

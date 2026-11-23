@@ -1,0 +1,17 @@
+# SDL's Android glue code. These files are vendored from SDL3 and are required
+# to build the APK, but they are not part of this project's own source.
+android/app/src/main/java/org/libsdl/app/SDL.java                         linguist-vendored
+android/app/src/main/java/org/libsdl/app/SDLActivity.java                 linguist-vendored
+android/app/src/main/java/org/libsdl/app/SDLAudioManager.java             linguist-vendored
+android/app/src/main/java/org/libsdl/app/SDLControllerManager.java        linguist-vendored
+android/app/src/main/java/org/libsdl/app/SDLDummyEdit.java                linguist-vendored
+android/app/src/main/java/org/libsdl/app/SDLInputConnection.java          linguist-vendored
+android/app/src/main/java/org/libsdl/app/SDLSensorManager.java            linguist-vendored
+android/app/src/main/java/org/libsdl/app/SDLSurface.java                  linguist-vendored
+android/app/src/main/java/org/libsdl/app/HIDDevice.java                   linguist-vendored
+android/app/src/main/java/org/libsdl/app/HIDDeviceManager.java            linguist-vendored
+android/app/src/main/java/org/libsdl/app/HIDDeviceUSB.java                linguist-vendored
+android/app/src/main/java/org/libsdl/app/HIDDeviceBLESteamController.java linguist-vendored
+
+# Mozilla CA bundle: data, not source.
+assets/ca-bundle.crt linguist-vendored

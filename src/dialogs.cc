@@ -811,11 +811,18 @@ void SettingsDialog::layoutFields(int panelW, int)
 
     if (aboutImage_)
     {
-        int imgW = std::min(480, std::max(220, contentW * 6 / 10));
+        //Use the actual scroll view width so the page never pans sideways.
+        int aboutW = panelW - 48;
+        if (aboutW <= 0)
+            aboutW = contentW;
+        int side = 16;
+        int labelW = std::max(120, aboutW - side * 2);
+
+        int imgW = std::min(480, std::max(200, labelW * 6 / 10));
         int imgH = imgW * 288 / 1440;
         int y = 12;
 
-        aboutImage_->setPosition((contentW - imgW) / 2, y);
+        aboutImage_->setPosition((aboutW - imgW) / 2, y);
         aboutImage_->setSize(imgW, imgH);
         y += imgH + 20;
 
@@ -823,9 +830,9 @@ void SettingsDialog::layoutFields(int panelW, int)
         {
             if (!label)
                 return;
-            int h = label->preferredHeight(contentW);
-            label->setPosition(0, y);
-            label->setSize(contentW, h);
+            int h = label->preferredHeight(labelW);
+            label->setPosition(side, y);
+            label->setSize(labelW, h);
             y += h + gapAfter;
         };
 
@@ -836,8 +843,8 @@ void SettingsDialog::layoutFields(int panelW, int)
         place(aboutLink_, 8);
 
         int aboutH = std::max(460, y + 24);
-        aboutContent_->setSize(contentW, aboutH);
-        aboutScroll_->setContentSize(contentW, aboutH);
+        aboutContent_->setSize(aboutW, aboutH);
+        aboutScroll_->setContentSize(aboutW, aboutH);
     }
 
     int mx = 40;
@@ -2271,8 +2278,8 @@ void ModelCatalogDialog::reload(bool force)
     {
         providerRows_.clear();
         modelRows_.clear();
-        providerList_->clear();
-        modelList_->clear();
+        providerList_->setItems({});
+        modelList_->setItems({});
         setMissingView(true);
         if (paths::isMobile())
         {
@@ -2453,11 +2460,11 @@ void ModelCatalogDialog::updatePage()
 
 void ModelCatalogDialog::rebuildProviders()
 {
-    providerList_->clear();
+    providerList_->setItems({});
     providerRows_.clear();
     selectedProvider_ = -1;
     modelRows_.clear();
-    modelList_->clear();
+    modelList_->setItems({});
     selectedModel_ = -1;
     details_->setText("");
 
@@ -2465,6 +2472,7 @@ void ModelCatalogDialog::rebuildProviders()
         return;
 
     std::string query = lowerAscii(trim(providerSearch_->text()));
+    std::vector<std::string> labels;
 
     for (int i = 0; i < (int)cat_->providers.size(); ++i)
     {
@@ -2479,20 +2487,22 @@ void ModelCatalogDialog::rebuildProviders()
         providerRows_.push_back(i);
         std::string tag = p.compatible ? tr().catalogCompatible
                                        : tr().catalogGateway;
-        providerList_->addItem(p.name + "   [" + tag + "]");
+        labels.push_back(p.name + "   [" + tag + "]");
     }
+
+    providerList_->setItems(std::move(labels),
+                            providerRows_.empty() ? -1 : 0);
 
     if (providerRows_.empty())
         return;
 
-    providerList_->setSelectedIndex(0);
     selectedProvider_ = providerRows_.front();
     rebuildModels();
 }
 
 void ModelCatalogDialog::rebuildModels()
 {
-    modelList_->clear();
+    modelList_->setItems({});
     modelRows_.clear();
     selectedModel_ = -1;
     details_->setText("");
@@ -2503,6 +2513,7 @@ void ModelCatalogDialog::rebuildModels()
 
     const catalog::Provider& p = cat_->providers[selectedProvider_];
     std::string query = lowerAscii(trim(modelSearch_->text()));
+    std::vector<std::string> labels;
 
     for (int i = 0; i < (int)p.models.size(); ++i)
     {
@@ -2515,13 +2526,14 @@ void ModelCatalogDialog::rebuildModels()
         }
 
         modelRows_.push_back(i);
-        modelList_->addItem(m.name);
+        labels.push_back(m.name);
     }
+
+    modelList_->setItems(std::move(labels), modelRows_.empty() ? -1 : 0);
 
     if (modelRows_.empty())
         return;
 
-    modelList_->setSelectedIndex(0);
     selectedModel_ = modelRows_.front();
     updateDetails();
 }

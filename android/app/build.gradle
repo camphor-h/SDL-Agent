@@ -26,8 +26,8 @@ android {
         applicationId "org.sdlagent"
         minSdkVersion 24
         targetSdkVersion 36
-        versionCode 261103
-        versionName "26.11.3"
+        versionCode 261104
+        versionName "26.11.4"
 
         externalNativeBuild {
             cmake {
