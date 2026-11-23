@@ -4,6 +4,8 @@
 
 #include "icon_bar_data.inc"
 
+#include "paths.hpp"
+
 #include <algorithm>
 #include <cmath>
 
@@ -115,6 +117,13 @@ ChatView::ChatView(sg::Widget* parent)
     scrollbarV(true);
     scrollbarH(false);
     setSelectable(true);
+
+    //A 6px bar keeps the text area readable; keep a wider drag target.
+    if (paths::isMobile())
+    {
+        setScrollbarWidth(6);
+        setScrollbarHitWidth(24);
+    }
 
     //Right-click opens a context menu; it must not clear the current
     //selection the way a left-button drag does.
@@ -457,6 +466,14 @@ void GlyphButton::setGlyph(Glyph glyph)
     markDirty();
 }
 
+void GlyphButton::setLabel(const std::string& label)
+{
+    if (label_ == label)
+        return;
+    label_ = label;
+    markDirty();
+}
+
 void GlyphButton::setColors(sg::Color bg, sg::Color hover, sg::Color pressed,
                             sg::Color glyph, sg::Color border)
 {
@@ -468,31 +485,82 @@ void GlyphButton::setColors(sg::Color bg, sg::Color hover, sg::Color pressed,
     markDirty();
 }
 
+void GlyphButton::setActive(bool active)
+{
+    if (active_ == active)
+        return;
+    active_ = active;
+    markDirty();
+}
+
+void GlyphButton::setActiveColors(sg::Color bg, sg::Color hover,
+                                  sg::Color pressed, sg::Color glyph,
+                                  sg::Color border)
+{
+    activeBg_ = bg;
+    activeHoverBg_ = hover;
+    activePressedBg_ = pressed;
+    activeGlyph_ = glyph;
+    activeBorder_ = border;
+    markDirty();
+}
+
 void GlyphButton::onRender(SDL_Renderer* renderer)
 {
     if (!visible())
         return;
 
     sg::Rect r = absoluteRect();
-    sg::Color bg = pressed_ ? pressedBg_ : (hover_ ? hoverBg_ : bg_);
+    sg::Color bg;
+    sg::Color glyph;
+    sg::Color border;
+
+    if (active_)
+    {
+        bg = pressed_ ? activePressedBg_ : (hover_ ? activeHoverBg_ : activeBg_);
+        glyph = activeGlyph_;
+        border = activeBorder_;
+    }
+    else
+    {
+        bg = pressed_ ? pressedBg_ : (hover_ ? hoverBg_ : bg_);
+        glyph = glyphColor_;
+        border = border_;
+    }
+
     fillRect(renderer, r, bg);
 
-    if (border_.a != 0)
+    if (border.a != 0)
     {
-        SDL_SetRenderDrawColor(renderer, border_.r, border_.g, border_.b,
-                               border_.a);
+        SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b,
+                               border.a);
         SDL_FRect fr = { (float)r.x, (float)r.y, (float)r.w, (float)r.h };
         SDL_RenderRect(renderer, &fr);
     }
 
-    SDL_SetRenderDrawColor(renderer, glyphColor_.r, glyphColor_.g,
-                           glyphColor_.b, glyphColor_.a);
+    SDL_SetRenderDrawColor(renderer, glyph.r, glyph.g, glyph.b, glyph.a);
 
     float cx = (float)r.x + r.w * 0.5f;
     float cy = (float)r.y + r.h * 0.5f;
-    float s = std::min(r.w, r.h) * 0.20f;
+    float glyphBox = std::min((float)r.w, (float)r.h);
+    if (!label_.empty())
+    {
+        glyphBox = (float)r.h;
+        cx = (float)r.x + 6.0f + glyphBox * 0.5f;
+    }
+
+    float s = glyphBox * 0.20f;
     if (s < 4.0f)
         s = 4.0f;
+
+    if (!label_.empty())
+    {
+        int lineH = sg::currentFont() ? sg::currentFont()->lineHeight() : 16;
+        int tx = (int)(cx + glyphBox * 0.5f + 6.0f);
+        int ty = r.y + (r.h - lineH) / 2;
+        drawClipped(renderer, label_, tx, ty,
+                    std::max(0, r.x + r.w - tx - 6), glyph);
+    }
 
     if (glyph_ == Glyph::Plus)
     {
@@ -510,7 +578,7 @@ void GlyphButton::onRender(SDL_Renderer* renderer)
     {
         //Geometry from a 24x24 outline icon:
         //body M3 8 H7 L9 4 H15 L17 8 H21 V19 H3 Z, lens at (12,13.5) r=3.8
-        float box = std::min((float)r.w, (float)r.h) * 0.72f;
+        float box = glyphBox * 0.72f;
         float u = box / 24.0f;
         float ox = cx - 12.0f * u;
         float oy = cy - 12.0f * u;
@@ -544,6 +612,48 @@ void GlyphButton::onRender(SDL_Renderer* renderer)
             SDL_RenderLine(renderer, prevX, prevY, nx, ny);
             prevX = nx;
             prevY = ny;
+        }
+
+        dirty_ = false;
+        return;
+    }
+
+    if (glyph_ == Glyph::Globe)
+    {
+        float rad = glyphBox * 0.28f;
+        if (rad < 4.0f)
+            rad = 4.0f;
+
+        float prevX = cx + rad;
+        float prevY = cy;
+        for (int i = 1; i <= 24; ++i)
+        {
+            float a = (float)i * 6.2831853f / 24.0f;
+            float nx = cx + std::cos(a) * rad;
+            float ny = cy + std::sin(a) * rad;
+            SDL_RenderLine(renderer, prevX, prevY, nx, ny);
+            prevX = nx;
+            prevY = ny;
+        }
+
+        prevX = cx;
+        prevY = cy - rad;
+        for (int i = 1; i <= 24; ++i)
+        {
+            float a = (float)i * 6.2831853f / 24.0f;
+            float nx = cx + std::cos(a) * rad * 0.45f;
+            float ny = cy + std::sin(a) * rad;
+            SDL_RenderLine(renderer, prevX, prevY, nx, ny);
+            prevX = nx;
+            prevY = ny;
+        }
+
+        const float lats[] = { -0.5f, 0.0f, 0.5f };
+        for (float lat : lats)
+        {
+            float dy = rad * lat;
+            float half = rad * std::sqrt(std::max(0.0f, 1.0f - lat * lat));
+            SDL_RenderLine(renderer, cx - half, cy + dy, cx + half, cy + dy);
         }
 
         dirty_ = false;

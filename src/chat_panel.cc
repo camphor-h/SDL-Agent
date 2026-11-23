@@ -3,6 +3,7 @@
 #include "chat_panel.hpp"
 
 #include "attachments.hpp"
+#include "filepick.hpp"
 #include "i18n.hpp"
 #include "markdown.hpp"
 #include "paths.hpp"
@@ -240,27 +241,6 @@ ChatPanel::ChatPanel(sg::Widget* parent)
     input_->setLineSpacing(2);
     input_->scrollbarH(false);
 
-#if defined(__ANDROID__)
-    //SDLGui starts text input only when focus changes. After the IME is
-    //dismissed with Back, tapping the still-focused editor has to ask for the
-    //keyboard again.
-    {
-        auto baseDown = input_->onMouseDown;
-        input_->onMouseDown = [this, baseDown](sg::MouseEvent& e)
-        {
-            if (baseDown)
-                baseDown(e);
-            if (!input_)
-                return;
-            if (sg::Window* win = input_->getWindow())
-            {
-                if (win->handle())
-                    SDL_StartTextInput(win->handle());
-            }
-        };
-    }
-#endif
-
     //Enter sends, Shift+Enter inserts a newline.
     input_->keyMap().remove(sg::TextEditAction::InsertNewline);
     input_->keyMap().add(sg::TextEditAction::InsertNewline, SDLK_RETURN,
@@ -268,6 +248,14 @@ ChatPanel::ChatPanel(sg::Widget* parent)
 
     input_->onKeyDown = [this](sg::KeyEvent& e)
     {
+        //Tab inserts indentation. SDLGui's text areas have no Tab action, so
+        //this cannot double-insert.
+        if (e.key == SDLK_TAB &&
+            (e.mod & (SDL_KMOD_CTRL | SDL_KMOD_ALT | SDL_KMOD_GUI)) == 0)
+        {
+            input_->insertText("    ");
+            return;
+        }
         if ((e.mod & SDL_KMOD_CTRL) && e.key == SDLK_N)
         {
             if (onNewChat)
@@ -308,6 +296,24 @@ ChatPanel::ChatPanel(sg::Widget* parent)
         };
     }
 
+    //Web-search toggle, level with the send/attach column. Inactive state is
+    //an accent outline; active state fills with the accent color.
+    std::string webLabel = tr().webSearchButton;
+    int webW = 52 + std::max(24, textWidth(webLabel));
+    webSearchButton_ = inputPanel_->addChild<GlyphButton>();
+    webSearchButton_->pos(0, 0)->sz(webW, 30);
+    webSearchButton_->setAnchors(
+        sg::AnchorLeft | sg::AnchorBottom,
+        paths::isMobile() ? 54 : 16, 0, 0, 41);
+    webSearchButton_->setGlyph(GlyphButton::Glyph::Globe);
+    webSearchButton_->setLabel(webLabel);
+    webSearchButton_->onClick = [this](sg::MouseEvent&)
+    {
+        setWebSearchEnabled(!webSearchEnabled_);
+        if (onWebSearchToggle)
+            onWebSearchToggle(webSearchEnabled_);
+    };
+
     hint_ = inputPanel_->addChild<sg::Label>();
     hint_->pos(14, 18)->sz(420, 18);
     hint_->setAutoHeight(true);
@@ -346,6 +352,9 @@ ChatPanel::ChatPanel(sg::Widget* parent)
         if (onCancel)
             onCancel();
     };
+
+    updateComposerLayout();
+    updateHint();
 }
 
 ChatPanel::~ChatPanel()
@@ -356,6 +365,16 @@ ChatPanel::~ChatPanel()
 
 void ChatPanel::openFileDialog()
 {
+#if defined(__ANDROID__)
+    //SDL's Android dialog returns content:// URIs; the Java bridge copies the
+    //selection to real cache files first.
+    if (filepick::available())
+    {
+        filepick::open();
+        return;
+    }
+#endif
+
     static const SDL_DialogFileFilter filters[] = {
         { "文本与代码", "txt;md;markdown;json;csv;log;xml;yaml;yml;c;h;cc;cpp;"
                         "hpp;py;js;ts;rs;go;java;sh;ps1;html;css;sql" },
@@ -485,6 +504,12 @@ void ChatPanel::updateComposerLayout()
 {
     if (!input_)
         return;
+
+    //Mobile: keep the composer height stable when the IME shrinks the window.
+    //Attachments add their own row instead of taking space from the input box.
+    if (paths::isMobile())
+        setPaneSize(1, 172 + (pending_.empty() ? 0 : 32));
+
     int top = pending_.empty() ? 8 : 40;
     input_->setAnchors(sg::AnchorLeft | sg::AnchorTop | sg::AnchorRight |
                            sg::AnchorBottom,
@@ -560,9 +585,21 @@ void ChatPanel::setModelName(const std::string& model)
     updateHint();
 }
 
-void ChatPanel::updateHint()
+void ChatPanel::setWebSearchEnabled(bool enabled)
 {
-    if (!hint_)
+    webSearchEnabled_ = enabled;
+    if (webSearchButton_)
+        webSearchButton_->setActive(enabled);
+}
+
+void ChatPanel::onFontChanged()
+{
+    sg::SplitView::onFontChanged();
+    updateHint();
+}
+
+void ChatPanel::updateHint()
+{    if (!hint_)
         return;
 
     std::string usage;
@@ -596,8 +633,15 @@ void ChatPanel::updateHint()
 
     usageLabel_->setText(usage);
     usageLabel_->setVisible(!usage.empty());
+
+    //Center the footer row in the 34px strip below the input box.
+    int lineH = sg::currentFont() ? sg::currentFont()->lineHeight() : 18;
+    int labelBottom = std::max(2, (34 - lineH) / 2);
+    int rightPad = usage.empty() ? 14 : 14 + 160 + 12;
     hint_->setAnchors(sg::AnchorLeft | sg::AnchorRight | sg::AnchorBottom,
-                      14, 0, usage.empty() ? 14 : 14 + 160 + 12, 14);
+                      14, 0, rightPad, labelBottom);
+    usageLabel_->setAnchors(sg::AnchorRight | sg::AnchorBottom,
+                            0, 0, 14, labelBottom);
 }
 
 void ChatPanel::setBusy(bool busy)
@@ -866,6 +910,29 @@ void ChatPanel::applyTheme(const sg::Theme& theme)
         cameraButton_->setColors(theme.inputBg, theme.buttonHover,
                                  theme.buttonPressed, theme.mutedText);
     }
+    if (webSearchButton_)
+    {
+        auto shade = [](sg::Color c, int delta)
+        {
+            auto clamp = [](int v)
+            {
+                return (uint8_t)(v < 0 ? 0 : (v > 255 ? 255 : v));
+            };
+            return sg::Color(clamp(c.r + delta), clamp(c.g + delta),
+                             clamp(c.b + delta), c.a);
+        };
+
+        sg::Color accent = theme.menuAccent;
+        int accentLum = (accent.r * 299 + accent.g * 587 + accent.b * 114) / 1000;
+        sg::Color onGlyph = accentLum > 150 ? sg::Color(20, 19, 0)
+                                            : sg::Color(255, 255, 255);
+
+        webSearchButton_->setColors(theme.inputBg, theme.buttonHover,
+                                    theme.buttonPressed, accent, accent);
+        webSearchButton_->setActiveColors(accent, shade(accent, 12),
+                                          shade(accent, -30), onGlyph,
+                                          accent);
+    }
     if (send_)
     {
         send_->setColors(theme.inputBg, theme.buttonHover,
@@ -895,6 +962,7 @@ void ChatPanel::applyTheme(const sg::Theme& theme)
         view_->setTableColors(theme.panelBg, theme.menuHover, theme.panelBorder);
         view_->setSeparatorColor(theme.border);
         view_->setActionColors(theme.buttonBg, theme.buttonText);
+        view_->setScrollbarColors(theme.scrollTrack, theme.scrollThumb);
     }
 
     cardBg_ = theme.inputBg;

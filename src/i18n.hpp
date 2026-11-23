@@ -106,6 +106,8 @@ struct Strings
     const char* welcomeText;
     const char* apiUrl;
     const char* apiKey;
+    const char* showApiKey;
+    const char* hideApiKey;
     const char* model;
     const char* temperature;
     const char* contextTokens;
@@ -154,6 +156,7 @@ struct Strings
     const char* catalogTitle;
     const char* catalogProvider;
     const char* catalogModel;
+    const char* catalogDoubleTap;
     const char* catalogSearchProvider;
     const char* catalogSearchModel;
     const char* catalogReload;
@@ -199,6 +202,8 @@ struct Strings
     const char* apiMissing;
     const char* tokenUsage;
     const char* webSearchReserved;
+    const char* webSearchButton;
+    const char* mobileToolsNote;
 };
 
 const Strings& tr();

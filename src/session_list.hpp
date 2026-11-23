@@ -34,7 +34,11 @@ public:
                         sdlgui::Color scrollTrack, sdlgui::Color scrollThumb);
 
     std::function<void(const std::string&)> onSelect;
+    std::function<void(const std::string&)> onActivate;
     std::function<void(const std::string&, sdlgui::ContextMenu&)> onSessionContextMenu;
+
+    bool canPan() const override;
+    bool panBy(int dx, int dy) override;
 
     void onRender(SDL_Renderer* renderer) override;
     void onMouseWheel(int delta) override;
@@ -64,6 +68,8 @@ private:
     int scrollY_ = 0;
     int contentH_ = 0;
     int hoverRow_ = -1;
+    std::string lastClickId_;
+    uint64_t    lastClickTicks_ = 0;
 
     sdlgui::Color textColor_{ 220, 222, 226, 255 };
     sdlgui::Color mutedColor_{ 145, 148, 155, 255 };

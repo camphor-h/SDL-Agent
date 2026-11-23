@@ -8,6 +8,7 @@
 #include "font.hpp"
 #include "log.hpp"
 #include "paths.hpp"
+#include "session_list.hpp"
 #include "ui_widgets.hpp"
 #include "util.hpp"
 #include "version.hpp"
@@ -271,7 +272,13 @@ void SettingsDialog::build(sg::Widget* root)
                            sg::AnchorBottom,
                        24, 64, 24, 130);
         sv->scrollbarV(true);
-        sv->setScrollbarColors(sg::Color(42, 44, 50), sg::Color(90, 94, 102));
+        sv->setScrollbarColors(sg::Color(42, 44, 50),
+                               sg::Color(90, 94, 102));
+        if (paths::isMobile())
+        {
+            sv->setScrollbarWidth(6);
+            sv->setScrollbarHitWidth(24);
+        }
         sv->setContentSize(800, height);
         content = sv->addChild<sg::Widget>();
         content->pos(0, 0)->sz(800, height);
@@ -283,26 +290,36 @@ void SettingsDialog::build(sg::Widget* root)
                                     sg::AnchorRight | sg::AnchorBottom,
                                 24, 64, 24, 130);
 
-    profileList_ = configListPage_->addChild<sg::ListBox>();
+    profileList_ = configListPage_->addChild<SessionList>();
     profileList_->pos(0, 0)->sz(1000, 400);
     profileList_->setAnchors(sg::AnchorLeft | sg::AnchorTop |
                                  sg::AnchorRight | sg::AnchorBottom,
                              0, 0, 0, 0);
-    profileList_->onItemSelected = [this](int index)
+    profileList_->setFocusable(true);
+    profileList_->onSelect = [this](const std::string& id)
     {
-        if (index < 0 || index >= (int)profiles_.size())
-            return;
-
-        lastClickedProfile_ = index;
-        activeProfileId_ = profiles_[index].id;
-        rebuildProfileList();
+        for (int i = 0; i < (int)profiles_.size(); ++i)
+        {
+            if (profiles_[i].id != id)
+                continue;
+            lastClickedProfile_ = i;
+            activeProfileId_ = id;
+            rebuildProfileList();
+            break;
+        }
     };
 
-    //Double-click (or Enter) a profile to open the edit page directly.
-    profileList_->onItemActivated = [this](int index)
+    //Second tap (or double click) opens the edit page.
+    profileList_->onActivate = [this](const std::string& id)
     {
-        if (index >= 0 && index < (int)profiles_.size())
-            editProfile(index);
+        for (int i = 0; i < (int)profiles_.size(); ++i)
+        {
+            if (profiles_[i].id == id)
+            {
+                editProfile(i);
+                break;
+            }
+        }
     };
 
     makePage(formScroll_, formContent_, 500);
@@ -330,6 +347,16 @@ void SettingsDialog::build(sg::Widget* root)
     addLabel(formContent_, 0, y, 200, tr().apiKey, sg::Color(200, 203, 210));
     apiKey_ = addTextBox(formContent_, 0, y + lh + labelGap, 800);
     apiKey_->setPassword(true);
+
+    apiKeyReveal_ = formContent_->addChild<sg::Button>();
+    apiKeyReveal_->pos(0, 0)->sz(56, fh);
+    apiKeyReveal_->setText(tr().showApiKey);
+    apiKeyReveal_->onClick = [this](sg::MouseEvent&)
+    {
+        bool reveal = apiKey_->isPassword();
+        apiKey_->setPassword(!reveal);
+        apiKeyReveal_->setText(reveal ? tr().hideApiKey : tr().showApiKey);
+    };
     y += lh + labelGap + fh + rowGap;
 
     addLabel(formContent_, 0, y, 200, tr().model, sg::Color(200, 203, 210));
@@ -735,7 +762,17 @@ void SettingsDialog::layoutFields(int panelW, int)
     if (profileName_)
         profileName_->setSize(contentW, fh);
     baseUrl_->setSize(contentW, fh);
-    apiKey_->setSize(contentW, fh);
+    {
+        const int revealW = 56;
+        const int revealGap = 8;
+        int keyW = std::max(120, contentW - revealW - revealGap);
+        apiKey_->setSize(keyW, fh);
+        if (apiKeyReveal_)
+        {
+            apiKeyReveal_->setPosition(contentW - revealW, apiKey_->y());
+            apiKeyReveal_->setSize(revealW, fh);
+        }
+    }
     int modelW = std::min(400, contentW);
     int catalogW = 220;
     if (contentW < 560)
@@ -1110,9 +1147,9 @@ void SettingsDialog::rebuildProfileList()
     if (!profileList_)
         return;
 
-    profileList_->clear();
-
+    std::vector<SessionListItem> items;
     int activeIndex = -1;
+
     for (std::size_t i = 0; i < profiles_.size(); ++i)
     {
         const ApiProfile& p = profiles_[i];
@@ -1122,20 +1159,20 @@ void SettingsDialog::rebuildProfileList()
         if (name.empty())
             name = "未命名";
 
-        std::string item = (p.id == activeProfileId_) ? "● " : "   ";
-        item += name;
+        std::string title = name;
         if (!p.model.empty() && p.model != name)
-            item += "   " + p.model;
-        profileList_->addItem(item);
+            title += "   " + p.model;
+
+        items.push_back({ p.id, title, false });
 
         if (p.id == activeProfileId_)
             activeIndex = (int)i;
     }
 
-    if (profiles_.empty())
-        profileList_->setSelectedIndex(-1);
-    else
-        profileList_->setSelectedIndex(activeIndex >= 0 ? activeIndex : 0);
+    if (!items.empty() && activeIndex < 0)
+        activeProfileId_ = items.front().id;
+
+    profileList_->setItems(std::move(items), activeProfileId_);
 }
 
 void SettingsDialog::editProfile(int index)
@@ -1178,6 +1215,9 @@ void SettingsDialog::editProfile(int index)
     }
 
     error_->setText("");
+    apiKey_->setPassword(true);
+    if (apiKeyReveal_)
+        apiKeyReveal_->setText(tr().showApiKey);
     selectPage(4);
 }
 
@@ -1289,8 +1329,16 @@ void SettingsDialog::deleteSelectedProfile()
     if (!profileList_)
         return;
 
-    int index = profileList_->selectedIndex();
-    if (index < 0 || index >= (int)profiles_.size())
+    int index = -1;
+    for (int i = 0; i < (int)profiles_.size(); ++i)
+    {
+        if (profiles_[i].id == activeProfileId_)
+        {
+            index = i;
+            break;
+        }
+    }
+    if (index < 0)
         return;
 
     std::string id = profiles_[index].id;
@@ -1532,6 +1580,22 @@ void SettingsDialog::applyTheme(const sg::Theme& theme)
         configDirLabel_->setTextColor(theme.mutedText);
     if (deleteProfile_)
         deleteProfile_->setTextColor(sg::Color(220, 70, 70));
+    if (profileList_)
+    {
+        int bgLum = (theme.windowBg.r * 299 + theme.windowBg.g * 587 +
+                     theme.windowBg.b * 114) / 1000;
+        bool dark = bgLum < 128;
+        sg::Color selectedRow = dark ? sg::Color(232, 222, 170)
+                                     : theme.rowSelected;
+        sg::Color selectedTxt = dark ? sg::Color(26, 24, 0)
+                                     : theme.rowSelectedText;
+        sg::Color selectedBar = dark ? sg::Color(255, 242, 0)
+                                     : sg::Color(45, 95, 170);
+        profileList_->setThemeColors(theme.text, theme.mutedText,
+                                     theme.rowHover, selectedRow,
+                                     selectedBar, selectedTxt, theme.border,
+                                     theme.scrollTrack, theme.scrollThumb);
+    }
     if (fontSummary_)
         fontSummary_->setTextColor(theme.mutedText);
     if (aboutTitle_)
@@ -1556,6 +1620,16 @@ void SettingsDialog::applyTheme(const sg::Theme& theme)
         catalogDialog_->applyTheme(theme);
     if (apiUpdateDialog_)
         apiUpdateDialog_->applyTheme(theme);
+
+    auto themeScroll = [&](sg::ScrollView* sv)
+    {
+        if (sv)
+            sv->setScrollbarColors(theme.scrollTrack, theme.scrollThumb);
+    };
+    themeScroll(formScroll_);
+    themeScroll(appearanceScroll_);
+    themeScroll(customScroll_);
+    themeScroll(aboutScroll_);
 }
 
 //==============================================================================
@@ -2139,6 +2213,7 @@ ModelCatalogDialog::ModelCatalogDialog(sg::Widget* root,
         if (row < 0 || row >= (int)providerRows_.size())
             return;
         selectedProvider_ = providerRows_[row];
+        lastModelTap_ = -1;
         rebuildModels();
         if (mobile_)
         {
@@ -2164,6 +2239,19 @@ ModelCatalogDialog::ModelCatalogDialog(sg::Widget* root,
     {
         if (row < 0 || row >= (int)modelRows_.size())
             return;
+
+        uint64_t now = SDL_GetTicks();
+        if (mobile_ && row == lastModelTap_ &&
+            now - lastModelTapMs_ < 450)
+        {
+            selectedModel_ = modelRows_[row];
+            updateDetails();
+            accept();
+            return;
+        }
+
+        lastModelTap_ = row;
+        lastModelTapMs_ = now;
         selectedModel_ = modelRows_[row];
         updateDetails();
     };
@@ -2229,6 +2317,7 @@ void ModelCatalogDialog::open(ApplyFn onApply)
     suppress_ = false;
 
     mobile_ = paths::isMobile() || modal_->width() < 640;
+    lastModelTap_ = -1;
     int rw = std::max(1, modal_->width());
     int rh = std::max(1, modal_->height());
     if (mobile_)
@@ -2448,10 +2537,17 @@ void ModelCatalogDialog::updatePage()
     if (providerList_) providerList_->setVisible(!models);
     if (updateApi_) updateApi_->setVisible(!models);
     if (modelLabel_) modelLabel_->setVisible(models);
+    if (modelLabel_)
+    {
+        modelLabel_->setText(
+            models ? std::string(tr().catalogModel) + "  ·  " +
+                         tr().catalogDoubleTap
+                   : tr().catalogModel);
+    }
     if (modelSearch_) modelSearch_->setVisible(models);
     if (modelList_) modelList_->setVisible(models);
     if (details_) details_->setVisible(models);
-    if (ok_) ok_->setVisible(models);
+    if (ok_) ok_->setVisible(false); // mobile: double-tap a model to apply
     if (cancel_) cancel_->setVisible(true);
 
     if (panel_ && panel_->getWindow())
@@ -2505,6 +2601,7 @@ void ModelCatalogDialog::rebuildModels()
     modelList_->setItems({});
     modelRows_.clear();
     selectedModel_ = -1;
+    lastModelTap_ = -1;
     details_->setText("");
 
     if (!cat_ || !cat_->loaded || selectedProvider_ < 0 ||

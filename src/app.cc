@@ -8,6 +8,7 @@
 #include "camera.hpp"
 #include "chat_panel.hpp"
 #include "dialogs.hpp"
+#include "filepick.hpp"
 #include "font.hpp"
 #include "i18n.hpp"
 #include "ime.hpp"
@@ -103,11 +104,15 @@ sg::Theme makeTheme(bool light)
     t.titleButtonHover = sg::Color(46, 48, 54);
     t.titleCloseHover = sg::Color(190, 45, 45);
 
-    t.menuAccent = sg::Color(88, 150, 230);
+    t.menuAccent = sg::Color(255, 242, 0); //same yellow as the app icon
     t.checkboxBox = sg::Color(230, 232, 236);
     t.checkboxBorder = sg::Color(90, 93, 100);
     t.checkboxCheck = sg::Color(70, 150, 90);
 
+    //Dark amber for list/dropdown selections; the session list and profile
+    //list use a softer pale yellow with black text below.
+    t.rowSelected = sg::Color(74, 66, 10);
+    t.rowSelectedText = sg::Color(255, 242, 0);
     t.overlay = sg::Color(0, 0, 0, 180);
     t.dialogBg = sg::Color(38, 40, 46);
     t.dialogBorder = sg::Color(70, 73, 80);
@@ -278,13 +283,15 @@ App::App(bool openSettingsOnStart, std::string initialSessionId)
             log::writef("%s", fontErr.c_str());
     }
 
-    agentEventType_ = SDL_RegisterEvents(5);
+    agentEventType_ = SDL_RegisterEvents(6);
     titleEventType_ = agentEventType_ ? agentEventType_ + 1 : 0;
     logEventType_ = agentEventType_ ? agentEventType_ + 2 : 0;
     cameraEventType_ = agentEventType_ ? agentEventType_ + 3 : 0;
     imeEventType_ = agentEventType_ ? agentEventType_ + 4 : 0;
+    filePickEventType_ = agentEventType_ ? agentEventType_ + 5 : 0;
     camera::setEventType(cameraEventType_);
     ime::setEventType(imeEventType_);
+    filepick::setEventType(filePickEventType_);
     engine_.setUserEventType(agentEventType_);
     gui_.onUserEvent = [this](const SDL_Event& ev)
     {
@@ -299,6 +306,8 @@ App::App(bool openSettingsOnStart, std::string initialSessionId)
             handleCameraResult();
         else if (imeEventType_ && ev.type == imeEventType_)
             handleImeInset();
+        else if (filePickEventType_ && ev.type == filePickEventType_)
+            handleFilePickResult();
     };
     if (logEventType_)
         logTimer_ = SDL_AddTimer(200, &App::logTimerProc, this);
@@ -352,6 +361,14 @@ App::App(bool openSettingsOnStart, std::string initialSessionId)
     win_->setTitleIconPadding(10, 8);
     win_->setWindowIconMemory(sdlagent::icon::kPng,
                               sdlagent::icon::kPngSize);
+
+    if (win_->handle())
+    {
+        int ww = 0, wh = 0;
+        SDL_GetWindowSize(win_->handle(), &ww, &wh);
+        imeBaseWindowH_ = wh;
+        SDL_AddEventWatch(&App::imeResizeWatch, this);
+    }
 
     buildUi();
     buildDialogs();
@@ -436,12 +453,37 @@ App::App(bool openSettingsOnStart, std::string initialSessionId)
 
 App::~App()
 {
+    SDL_RemoveEventWatch(&App::imeResizeWatch, this);
     if (logTimer_)
     {
         SDL_RemoveTimer(logTimer_);
         logTimer_ = 0;
     }
     stopTitleWorker();
+}
+
+bool SDLCALL App::imeResizeWatch(void* userdata, SDL_Event* event)
+{
+    auto* app = static_cast<App*>(userdata);
+    if (!app || !event)
+        return false;
+
+    if (event->type == SDL_EVENT_WINDOW_DISPLAY_CHANGED)
+    {
+        app->imeBaseWindowH_ = 0;
+        return false;
+    }
+
+    if ((event->type == SDL_EVENT_WINDOW_RESIZED ||
+         event->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) &&
+        app->imeInsetPx_ <= 0 && app->win_ && app->win_->handle())
+    {
+        int w = 0, h = 0;
+        SDL_GetWindowSize(app->win_->handle(), &w, &h);
+        if (h > app->imeBaseWindowH_)
+            app->imeBaseWindowH_ = h;
+    }
+    return false;
 }
 
 Uint32 SDLCALL App::logTimerProc(void* userdata, SDL_TimerID, Uint32)
@@ -569,6 +611,14 @@ void App::buildUi()
     chat_->onNewChat = [this] { createSession(); };
     chat_->onOpenSettings = [this] { openSettings(); };
     chat_->onCamera = [this] { camera::capture(); };
+    chat_->onWebSearchToggle = [this](bool enabled)
+    {
+        config_.webSearch = enabled;
+        std::string err;
+        if (!saveConfig(paths::configFile(), config_, err) && !err.empty())
+            log::writef("%s", err.c_str());
+    };
+    chat_->setWebSearchEnabled(config_.webSearch);
     chat_->onConfirmation = [this](ui::ChatPanel::ConfirmChoice choice)
     {
         if (!engine_.busy())
@@ -601,12 +651,13 @@ void App::buildUi()
                                  sg::AnchorRight | sg::AnchorBottom,
                              0, 0, 0, 0);
 
-        //A square pull-tab attached to the right edge of the drawer; the
-        //built-in X is too small and its meaning is ambiguous on touch.
-        drawerTab_ = root.addChild<ui::ArrowButton>();
+        //A square close button inside the panel's top-right corner. The
+        //built-in X is hidden; the new-chat button leaves room on the right.
+        const int tabSize = 30;
+        drawerTab_ = drawer_->panel()->addChild<ui::ArrowButton>();
         drawerTab_->setDirection(ui::ArrowButton::Direction::Right);
-        drawerTab_->pos(drawer_->panelWidth(), 12)->sz(36, 36);
-        drawerTab_->setVisible(false);
+        drawerTab_->pos(drawer_->panelWidth() - tabSize - 8, 14)
+            ->sz(tabSize, tabSize);
         drawerTab_->onClick = [this](sg::MouseEvent&)
         {
             if (drawer_)
@@ -618,8 +669,9 @@ void App::buildUi()
         {
             if (drawerTab_)
             {
-                drawerTab_->setVisible(open);
-                drawerTab_->setPosition(drawer_->panelWidth(), 12);
+                const int tabSize = 30;
+                drawerTab_->setPosition(drawer_->panelWidth() - tabSize - 8,
+                                        14);
             }
             if (win_)
                 win_->requestRedraw();
@@ -671,13 +723,18 @@ void App::applyTheme(const std::string& themeName)
         contentTopbarLine_->setColor(sg::Color(0, 0, 0, 255));
     if (sessionList_)
     {
-        sg::Color selectedBar = themeName == "light"
-                                    ? sg::Color(45, 95, 170)
-                                    : sg::Color(88, 150, 230);
+        bool dark = themeName != "light";
+        sg::Color selectedRow = dark ? sg::Color(232, 222, 170)
+                                     : theme.rowSelected;
+        sg::Color selectedTxt = dark ? sg::Color(26, 24, 0)
+                                     : theme.rowSelectedText;
+        sg::Color selectedBar = dark
+                                    ? sg::Color(255, 242, 0)
+                                    : sg::Color(45, 95, 170);
         sessionList_->setThemeColors(theme.text, theme.mutedText,
-                                     theme.rowHover, theme.rowSelected,
+                                     theme.rowHover, selectedRow,
                                      selectedBar,
-                                     theme.rowSelectedText, theme.border,
+                                     selectedTxt, theme.border,
                                      theme.scrollTrack, theme.scrollThumb);
     }
     if (chat_)
@@ -694,9 +751,13 @@ void App::applyTheme(const std::string& themeName)
                              clamp(c.b + delta), c.a);
         };
         newChatButton_->setBgColor(theme.menuAccent,
-                                   shade(theme.menuAccent, 14),
-                                   shade(theme.menuAccent, -14));
-        newChatButton_->setTextColor(sg::Color(255, 255, 255));
+                                   shade(theme.menuAccent, 12),
+                                   shade(theme.menuAccent, -30));
+        int accentLum = (theme.menuAccent.r * 299 + theme.menuAccent.g * 587 +
+                         theme.menuAccent.b * 114) / 1000;
+        newChatButton_->setTextColor(accentLum > 150
+                                         ? sg::Color(20, 19, 0)
+                                         : sg::Color(255, 255, 255));
         newChatButton_->setBorderColor(theme.menuAccent);
     }
     if (toggleSidebar_)
@@ -1358,20 +1419,77 @@ void App::handleCameraResult()
     gui_.setFocus(chat_->inputWidget());
 }
 
+void App::handleFilePickResult()
+{
+    std::vector<std::string> paths;
+    if (!filepick::take(paths) || !chat_)
+        return;
+
+    std::string firstError;
+    for (const std::string& path : paths)
+    {
+        std::string err;
+        chat_->addPickedFile(path, err);
+        if (firstError.empty() && !err.empty())
+            firstError = err;
+    }
+
+    if (!firstError.empty() && win_)
+    {
+        win_->showMessageBox(tr().attach, firstError.c_str(),
+                             sg::MessageBoxType::Warning,
+                             sg::MessageBoxButtons::OK, nullptr);
+    }
+}
+
 void App::handleImeInset()
 {
     int px = 0;
     if (!ime::takeInset(px))
         return;
 
-    //The inset arrives in physical pixels; SDLGui lays widgets out in logical
-    //units, so divide by the UI scale.
+    applyImeInset(px);
+}
+
+void App::applyImeInset(int px)
+{
+    imeInsetPx_ = px;
+    if (!win_ || !win_->handle())
+        return;
+
+    int ww = 0, wh = 0;
+    SDL_GetWindowSize(win_->handle(), &ww, &wh);
+
+    if (px <= 0)
+    {
+        if (wh > 0 && (imeBaseWindowH_ <= 0 || wh > imeBaseWindowH_))
+            imeBaseWindowH_ = wh;
+        gui_.setKeyboardInset(0);
+        if (win_)
+            win_->requestRedraw();
+        return;
+    }
+
+    if (imeBaseWindowH_ <= 0)
+        imeBaseWindowH_ = wh;
+
+    //Some devices resize the SDL window for the IME even with
+    //ADJUST_NOTHING. Only subtract the part the window has not already lost.
+    int already = std::max(0, imeBaseWindowH_ - wh);
+    int effective = std::max(0, px - already);
+
     float scale = gui_.uiScale();
     if (scale < 0.01f)
         scale = 1.0f;
 
-    int logical = (int)std::lround((double)px / (double)scale);
+    int logical = (int)std::lround((double)effective / (double)scale);
     gui_.setKeyboardInset(logical);
+
+    log::writef("ime px=%d win=%dx%d base=%d scale=%.2f effective=%d logical=%d",
+                px, ww, wh, imeBaseWindowH_, (double)scale, effective,
+                logical);
+
+    //Window::layoutRoot refreshes the SDL IME anchor after resizing the root.
     if (win_)
         win_->requestRedraw();
 }

@@ -10,6 +10,10 @@
 #include <mutex>
 #include <vector>
 
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif
+
 namespace sdlagent::log
 {
 namespace
@@ -72,6 +76,10 @@ void writeLine(const std::string& raw)
     }
 
     std::fprintf(stderr, "%s\n", line.c_str());
+
+#if defined(__ANDROID__)
+    __android_log_print(ANDROID_LOG_INFO, "sdlagent", "%s", line.c_str());
+#endif
 }
 
 void writef(const char* fmt, ...)

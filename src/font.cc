@@ -25,6 +25,10 @@ namespace
 
 bool gTtfInit = false;
 
+//Number of spaces a tab is displayed as. SDL_ttf has no tab stop handling
+//and renders U+0009 as the missing-glyph box, so the app expands it itself.
+constexpr int kTabSpaces = 4;
+
 class TtfFont : public sdlgui::Font
 {
 public:
@@ -109,6 +113,11 @@ public:
 
     int advance(uint32_t codepoint) const override
     {
+        //Tabs are drawn as blank space; SDL_ttf would otherwise render the
+        //missing-glyph box, so measure and paint them as four spaces.
+        if (codepoint == '\t')
+            return tabAdvance_;
+
         TTF_Font* f = fontFor(codepoint);
         int minx = 0, maxx = 0, miny = 0, maxy = 0, adv = 0;
         if (TTF_GetGlyphMetrics(f, (Uint32)codepoint, &minx, &maxx, &miny,
@@ -127,12 +136,13 @@ public:
             split(text, std::strlen(text));
 
         float penX = (float)x;
-        for (const Segment& seg : segments)
-        {            if (seg.len == 0)
-                continue;
+        auto drawRun = [&](const char* run, size_t len, bool emoji)
+        {
+            if (len == 0)
+                return;
 
-            TextureKey key{ renderer, std::string(seg.text, seg.len),
-                            seg.emoji ? emoji_ : font_ };
+            TextureKey key{ renderer, std::string(run, len),
+                            emoji ? emoji_ : font_ };
             auto it = cache_.find(key);
 
             if (it == cache_.end())
@@ -142,9 +152,9 @@ public:
 
                 SDL_Color white{ 255, 255, 255, 255 };
                 SDL_Surface* surface = TTF_RenderText_Blended(
-                    key.font, seg.text, seg.len, white);
+                    key.font, run, len, white);
                 if (!surface)
-                    continue;
+                    return;
 
                 SDL_Texture* texture =
                     SDL_CreateTextureFromSurface(renderer, surface);
@@ -155,16 +165,16 @@ public:
                 SDL_DestroySurface(surface);
 
                 if (!texture)
-                    continue;
+                    return;
                 SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
                 it = cache_.emplace(key, entry).first;
             }
 
             SDL_Texture* texture = it->second.texture;
             if (!texture)
-                continue;
+                return;
 
-            bool colorGlyph = seg.emoji && emojiColor_;
+            bool colorGlyph = emoji && emojiColor_;
             if (colorGlyph)
             {
                 SDL_SetTextureColorMod(texture, 255, 255, 255);
@@ -186,6 +196,28 @@ public:
             SDL_RenderTexture(renderer, texture, nullptr, &dst);
 
             penX += dw;
+        };
+
+        for (const Segment& seg : segments)
+        {
+            const char* p = seg.text;
+            const char* end = seg.text + seg.len;
+            const char* run = p;
+
+            while (p < end)
+            {
+                if (*p == '\t')
+                {
+                    if (p > run)
+                        drawRun(run, (size_t)(p - run), seg.emoji);
+                    penX += (float)tabAdvance_;
+                    run = p + 1;
+                }
+                ++p;
+            }
+
+            if (p > run)
+                drawRun(run, (size_t)(p - run), seg.emoji);
         }
     }
 
@@ -234,6 +266,7 @@ private:
     float     scale_ = 1.0f;
     int       lineHeight_ = 16;
     int       ascent_ = 16;
+    int       tabAdvance_ = 16;
     std::unordered_map<TextureKey, Entry, TextureKeyHash> cache_;
 
     int toLogical(int px) const
@@ -257,6 +290,15 @@ private:
         ascent_ = toLogical(TTF_GetFontAscent(font_));
         if (ascent_ < 0)
             ascent_ = lineHeight_;
+
+        int spaceAdv = 0;
+        int sx0 = 0, sx1 = 0, sy0 = 0, sy1 = 0;
+        if (TTF_GetGlyphMetrics(font_, ' ', &sx0, &sx1, &sy0, &sy1,
+                                &spaceAdv))
+            spaceAdv = toLogical(spaceAdv);
+        if (spaceAdv <= 0)
+            spaceAdv = std::max(1, pointSize_ / 4);
+        tabAdvance_ = spaceAdv * kTabSpaces;
 
         if (emoji_)
         {
@@ -372,7 +414,7 @@ private:
         return out;
     }
 
-    int measureRange(const char* text, size_t len) const
+    int measureRun(const char* text, size_t len) const
     {
         float total = 0.0f;
         for (const Segment& seg : split(text, len))
@@ -385,6 +427,31 @@ private:
                 total += (float)w / scale_;
         }
         return (int)std::lround(total);
+    }
+
+    int measureRange(const char* text, size_t len) const
+    {
+        int          total = 0;
+        const char*  p     = text;
+        const char*  end   = text + len;
+        const char*  run   = p;
+
+        while (p < end)
+        {
+            if (*p == '\t')
+            {
+                if (p > run)
+                    total += measureRun(run, (size_t)(p - run));
+                total += tabAdvance_;
+                run = p + 1;
+            }
+            ++p;
+        }
+
+        if (p > run)
+            total += measureRun(run, (size_t)(p - run));
+
+        return total;
     }
 
     void clearCache()

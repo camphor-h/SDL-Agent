@@ -45,8 +45,18 @@ SessionList::SessionList(sg::Widget* parent)
         if (row < 0 || row >= (int)rows_.size())
             return;
         const Row& r = rows_[(size_t)row];
-        if (r.type == Row::Type::Session && onSelect)
+        if (r.type != Row::Type::Session)
+            return;
+
+        if (onSelect)
             onSelect(r.id);
+
+        //Second click on the same row within a short window = activate.
+        uint64_t now = SDL_GetTicks();
+        if (onActivate && r.id == lastClickId_ && now - lastClickTicks_ < 450)
+            onActivate(r.id);
+        lastClickId_ = r.id;
+        lastClickTicks_ = now;
     };
     onContextMenu = [this](sg::MouseEvent& e, sg::ContextMenu& menu)
     {
@@ -67,6 +77,27 @@ void SessionList::setItems(std::vector<SessionListItem> items,
     items_ = std::move(items);
     activeId_ = activeId;
     rebuild();
+}
+
+bool SessionList::canPan() const
+{
+    return contentH_ > height_;
+}
+
+bool SessionList::panBy(int dx, int dy)
+{
+    (void)dx;
+    if (dy == 0 || contentH_ <= height_)
+        return false;
+
+    int before = scrollY_;
+    int maxScroll = std::max(0, contentH_ - height_);
+    scrollY_ = std::max(0, std::min(scrollY_ - dy, maxScroll));
+    if (scrollY_ == before)
+        return false;
+
+    markDirty();
+    return true;
 }
 
 void SessionList::setActive(const std::string& id)

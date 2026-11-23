@@ -2,6 +2,7 @@
 
 #include "prompt.hpp"
 
+#include "i18n.hpp"
 #include "paths.hpp"
 #include "util.hpp"
 #include "version.hpp"
@@ -140,10 +141,16 @@ std::string compose(const std::string& sysText, const std::string& toolText,
 {
     std::string out = trim(sysText).empty() ? std::string(defaults::kSys) : sysText;
 
-    if (toolsEnabled && !trim(toolText).empty())
+    if (toolsEnabled && !paths::isMobile() && !trim(toolText).empty())
     {
         out += "\n\n";
         out += toolText;
+    }
+
+    if (toolsEnabled && paths::isMobile())
+    {
+        out += "\n\n";
+        out += tr().mobileToolsNote;
     }
 
     out += "\n\n";

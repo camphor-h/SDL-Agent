@@ -58,6 +58,7 @@ struct Config
     ToolMode toolMode = ToolMode::Ask;
     bool     showReasoning = false;
     bool     autoTitle = true;
+    bool     webSearch = false;
 
     std::string theme = "light"; //dark | light
     Lang        lang  = Lang::Zh;

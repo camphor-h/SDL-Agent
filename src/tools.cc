@@ -776,10 +776,17 @@ std::string ToolRegistry::schemaJson() const
 ToolRegistry makeBuiltinTools()
 {
     ToolRegistry reg;
-    reg.add(makeReadTool());
-    reg.add(makeWriteTool());
-    reg.add(makeEditTool());
-    reg.add(makeShellTool());
+
+    //Mobile has no document picker, and its process/file access is heavily
+    //restricted, so desktop tools are not registered at all.
+    if (!paths::isMobile())
+    {
+        reg.add(makeReadTool());
+        reg.add(makeWriteTool());
+        reg.add(makeEditTool());
+        reg.add(makeShellTool());
+    }
+
     reg.add(makeWebSearchTool()); //reserved
     return reg;
 }

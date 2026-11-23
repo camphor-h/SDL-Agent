@@ -157,28 +157,43 @@ private:
 class GlyphButton : public sdlgui::Widget
 {
 public:
-    enum class Glyph { Plus, Return, Camera };
+    enum class Glyph { Plus, Return, Camera, Globe };
 
     explicit GlyphButton(sdlgui::Widget* parent = nullptr);
 
     void setGlyph(Glyph glyph);
     Glyph glyph() const { return glyph_; }
+    void setLabel(const std::string& label);
 
     void setColors(sdlgui::Color bg, sdlgui::Color hover,
                    sdlgui::Color pressed, sdlgui::Color glyph,
                    sdlgui::Color border = sdlgui::Color(0, 0, 0, 0));
 
+    //Active state fills the button; inactive shows only the outline.
+    void setActive(bool active);
+    bool active() const { return active_; }
+    void setActiveColors(sdlgui::Color bg, sdlgui::Color hover,
+                         sdlgui::Color pressed, sdlgui::Color glyph,
+                         sdlgui::Color border);
+
     void onRender(SDL_Renderer* renderer) override;
 
 private:
     Glyph glyph_ = Glyph::Plus;
+    std::string label_;
     bool  hover_ = false;
     bool  pressed_ = false;
+    bool  active_ = false;
     sdlgui::Color bg_{ 44, 46, 52, 255 };
     sdlgui::Color hoverBg_{ 56, 58, 66, 255 };
     sdlgui::Color pressedBg_{ 36, 38, 43, 255 };
     sdlgui::Color glyphColor_{ 230, 232, 237, 255 };
     sdlgui::Color border_{ 0, 0, 0, 0 };
+    sdlgui::Color activeBg_{ 60, 120, 200, 255 };
+    sdlgui::Color activeHoverBg_{ 74, 136, 214, 255 };
+    sdlgui::Color activePressedBg_{ 46, 102, 172, 255 };
+    sdlgui::Color activeGlyph_{ 255, 255, 255, 255 };
+    sdlgui::Color activeBorder_{ 0, 0, 0, 0 };
 };
 
 //full-window dimming layer that centers one fixed-size panel

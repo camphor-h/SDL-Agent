@@ -26,6 +26,7 @@ class FontDialog;
 class ModelCatalogDialog;
 class ApiUpdateDialog;
 class ProgressBar;
+class SessionList;
 
 class ConfirmDialog;
 
@@ -104,7 +105,7 @@ private:
     int               page_ = -1;
 
     //profiles
-    sdlgui::ListBox*  profileList_ = nullptr;
+    SessionList*      profileList_ = nullptr;
     sdlgui::Button*   newProfile_ = nullptr;
     sdlgui::Button*   deleteProfile_ = nullptr;
     sdlgui::Button*   saveProfile_ = nullptr;
@@ -122,6 +123,7 @@ private:
     sdlgui::TextBox*  profileName_ = nullptr;
     sdlgui::TextBox*  baseUrl_ = nullptr;
     sdlgui::TextBox*  apiKey_ = nullptr;
+    sdlgui::Button*   apiKeyReveal_ = nullptr;
     sdlgui::TextBox*  model_ = nullptr;
     sdlgui::Label*    contextTokensLabel_ = nullptr;
     sdlgui::TextBox*  contextTokens_ = nullptr;
@@ -347,6 +349,8 @@ private:
     std::vector<int> modelRows_;
     int selectedProvider_ = -1;
     int selectedModel_ = -1;
+    int lastModelTap_ = -1;
+    uint64_t lastModelTapMs_ = 0;
     bool suppress_ = false;
 
     const catalog::Catalog* cat_ = nullptr;

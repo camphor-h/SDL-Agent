@@ -35,6 +35,7 @@ public:
     void setModelName(const std::string& model);
     void setImageInputSupported(bool supported);
     void setSessionsRoot(const std::filesystem::path& root);
+    void setWebSearchEnabled(bool enabled);
 
     void        refresh(bool forceBottom = false);
     std::string inputText() const;
@@ -68,10 +69,12 @@ public:
     std::function<void()>                   onOpenSettings;
     std::function<void()>                   onCamera;
     std::function<void(ConfirmChoice)>      onConfirmation;
+    std::function<void(bool)>               onWebSearchToggle;
 
 private:
     void buildConfirmation(std::vector<sdlgui::RichTextBlock>& blocks) const;
 
+    void onFontChanged() override;
     void openFileDialog();
     void removeAttachment(std::size_t index);
     void rebuildAttachmentRow();
@@ -87,6 +90,7 @@ private:
     sdlgui::Button*      stop_ = nullptr;
     GlyphButton*         attachButton_ = nullptr;
     GlyphButton*         cameraButton_ = nullptr;
+    GlyphButton*         webSearchButton_ = nullptr;
     sdlgui::Widget*      attachRow_ = nullptr;
     Session*             session_ = nullptr;
     std::filesystem::path sessionsRoot_;
@@ -95,6 +99,7 @@ private:
     bool                 imageAllowed_ = true;
     bool                 showReasoning_ = false;
     bool                 busy_ = false;
+    bool                 webSearchEnabled_ = false;
     std::string          status_;
     std::string          modelName_;
     int                  usageTokens_ = 0;

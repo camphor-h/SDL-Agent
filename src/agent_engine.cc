@@ -673,7 +673,10 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
         pushEvent(std::move(done));
 
         if (assistant.toolCalls.empty() || assistant.toolCalls == "[]")
+        {
+            lastHadTools = false;
             break;
+        }
 
         lastHadTools = false;
         Json calls = Json::parse(assistant.toolCalls);

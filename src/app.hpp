@@ -64,7 +64,10 @@ private:
 
     void onAgentEvents();
     void handleCameraResult();
+    void handleFilePickResult();
     void handleImeInset();
+    void applyImeInset(int px);
+    static bool SDLCALL imeResizeWatch(void* userdata, SDL_Event* event);
     void handleAgentEvent(const AgentEvent& ev, bool& refresh, bool& force);
     void setBusyUi(bool busy);
     void showStatus(const std::string& text);
@@ -104,6 +107,9 @@ private:
     uint32_t logEventType_ = 0;
     uint32_t cameraEventType_ = 0;
     uint32_t imeEventType_ = 0;
+    uint32_t filePickEventType_ = 0;
+    int      imeInsetPx_ = 0;
+    int      imeBaseWindowH_ = 0;
     int settingsLineHeight_ = 0;
     SDL_TimerID logTimer_ = 0;
 

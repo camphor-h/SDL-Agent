@@ -70,6 +70,7 @@ Config loadConfig(const std::filesystem::path& file)
     cfg.maxTokens = (int)j["maxTokens"].integer(cfg.maxTokens);
     cfg.showReasoning = j["showReasoning"].boolean(false);
     cfg.autoTitle = j["autoTitle"].boolean(true);
+    cfg.webSearch = j["webSearch"].boolean(false);
     cfg.onboarded = j["onboarded"].boolean(false);
     cfg.uiScale = (float)j["uiScale"].number(cfg.uiScale);
 
@@ -247,6 +248,7 @@ bool saveConfig(const std::filesystem::path& file, const Config& cfg,
         .set("toolMode", toolModeToString(cfg.toolMode))
         .set("showReasoning", cfg.showReasoning)
         .set("autoTitle", cfg.autoTitle)
+        .set("webSearch", cfg.webSearch)
         .set("theme", cfg.theme)
         .set("lang", cfg.lang == Lang::En ? "en" : "zh")
         .set("uiScale", (double)cfg.uiScale)
