@@ -68,6 +68,15 @@ private:
     void handleImeInset();
     void applyImeInset(int px);
     static bool SDLCALL imeResizeWatch(void* userdata, SDL_Event* event);
+
+    //Clipboard and drag-and-drop handling.
+    static bool SDLCALL eventFilter(void* userdata, SDL_Event* event);
+    bool handleAppEvent(SDL_Event& ev);
+    bool pasteFromClipboard();
+    void handleDroppedFile(const char* path);
+    void updateWebSearchAvailability();
+    bool canAttachFiles() const;
+    void attachFiles(const std::vector<std::string>& paths);
     void handleAgentEvent(const AgentEvent& ev, bool& refresh, bool& force);
     void setBusyUi(bool busy);
     void showStatus(const std::string& text);

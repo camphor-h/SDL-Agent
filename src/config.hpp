@@ -62,6 +62,8 @@ struct Config
 
     std::string theme = "light"; //dark | light
     Lang        lang  = Lang::Zh;
+    //Reserved: the desktop follows the OS display scale and mobile uses the
+    //device density. Kept so older config files still round-trip.
     float       uiScale = 1.0f;
 
     //font backend: "ttf" (system font; built-in bitmap font is disabled)

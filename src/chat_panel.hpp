@@ -36,6 +36,7 @@ public:
     void setImageInputSupported(bool supported);
     void setSessionsRoot(const std::filesystem::path& root);
     void setWebSearchEnabled(bool enabled);
+    void setWebSearchAvailable(bool available);
 
     void        refresh(bool forceBottom = false);
     std::string inputText() const;
@@ -100,6 +101,7 @@ private:
     bool                 showReasoning_ = false;
     bool                 busy_ = false;
     bool                 webSearchEnabled_ = false;
+    bool                 webSearchAvailable_ = false;
     std::string          status_;
     std::string          modelName_;
     int                  usageTokens_ = 0;

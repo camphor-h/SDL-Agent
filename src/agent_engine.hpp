@@ -40,6 +40,9 @@ struct AgentRunConfig
     bool        imageInput = false;
     std::vector<HttpHeader> headers;
     ToolMode    toolMode = ToolMode::Ask;
+    //Provider-native web search, resolved by the app from the capability table.
+    std::string nativeWebTool; //raw tool object; empty = disabled
+    bool        nativeWebChatOptions = false; //OpenAI Chat search models
 };
 
 struct ConfirmationData
@@ -105,11 +108,18 @@ private:
         std::string type = "function";
     };
 
+    struct Citation
+    {
+        std::string url;
+        std::string title;
+    };
+
     struct StreamAccum
     {
         std::string text;
         std::string thinking;
         std::map<int, ToolAccum> calls;
+        std::vector<Citation> citations;
     };
 
     void run(std::vector<Message> history, AgentRunConfig cfg);

@@ -101,7 +101,7 @@ endif
 
 DEPS     := $(OBJ:.o=.d)
 
-.PHONY: all debug release run clean
+.PHONY: all debug release run clean apk
 
 all: $(TARGET)
 
@@ -173,6 +173,15 @@ $(BASE64_CFG):
 build/base64/%.o: $(BASE64_DIR)/%.c $(BASE64_CFG)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -DBASE64_STATIC_DEFINE -I$(BASE64_DIR)/lib -Ibuild/base64 -c $< -o $@
+
+# Signed release APK, copied to the repository root with an ABI-specific name.
+APK_SRC := android/app/build/outputs/apk/release/app-release.apk
+APK_OUT := sdlagent-android-aarch64.apk
+
+apk:
+	cd android && ./gradlew --no-daemon --console=plain assembleRelease
+	cp $(APK_SRC) $(APK_OUT)
+	@ls -lh $(APK_OUT)
 
 run: $(TARGET)
 	./$(TARGET)

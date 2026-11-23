@@ -5,6 +5,7 @@
 #include "attachments.hpp"
 #include "http_transport.hpp"
 #include "i18n.hpp"
+#include "log.hpp"
 #include "paths.hpp"
 #include "util.hpp"
 
@@ -142,6 +143,35 @@ void AgentEngine::onStream(StreamAccum& acc, const LlmmapiStreamEvent* ev)
                 call.args += ev->text;
             break;
         }
+
+        case LLMAPI_STREAM_CITATION:
+            if (ev->citation && ev->citation->url && *ev->citation->url)
+            {
+                std::string url = ev->citation->url;
+                bool seen = false;
+                for (const Citation& c : acc.citations)
+                {
+                    if (c.url == url)
+                    {
+                        seen = true;
+                        break;
+                    }
+                }
+                if (!seen)
+                {
+                    Citation c;
+                    c.url = url;
+                    if (ev->citation->title)
+                        c.title = ev->citation->title;
+                    acc.citations.push_back(std::move(c));
+                }
+            }
+            break;
+
+        case LLMAPI_STREAM_SERVER_TOOL:
+            //The provider is running a server-side tool; the status line
+            //already shows progress, so nothing to do here.
+            break;
 
         case LLMAPI_STREAM_DONE:
             break;
@@ -472,6 +502,18 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
             }
         }
 
+        //Server-side web search is not a client tool, so it is independent of
+        //the tool mode and the platform's client-tool filtering.
+        if (!cfg.nativeWebTool.empty() || cfg.nativeWebChatOptions)
+            log::writef("native web search: %s",
+                        cfg.nativeWebChatOptions
+                            ? "web_search_options"
+                            : cfg.nativeWebTool.c_str());
+        if (!cfg.nativeWebTool.empty())
+            llmapiReqAddRawTool(req, cfg.nativeWebTool.c_str());
+        if (cfg.nativeWebChatOptions)
+            llmapiReqSetExtra(req, "web_search_options", "{}");
+
         std::vector<std::string> pendingToolImages;
         auto flushToolImages = [&]()
         {
@@ -641,6 +683,27 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
             pushEvent(std::move(ev));
             failed = true;
             break;
+        }
+
+        //Attach sources only to the final assistant message of this turn;
+        //intermediate tool-call rounds keep the answer clean.
+        if (acc.calls.empty() && !acc.citations.empty())
+        {
+            std::string block = "\n\n";
+            block += tr().sources;
+            block += "\n";
+            std::size_t shown = 0;
+            for (const Citation& c : acc.citations)
+            {
+                if (shown++ >= 8)
+                    break;
+                block += "- [";
+                block += c.title.empty() ? c.url : c.title;
+                block += "](";
+                block += c.url;
+                block += ")\n";
+            }
+            acc.text += block;
         }
 
         Message assistant;

@@ -307,8 +307,11 @@ ChatPanel::ChatPanel(sg::Widget* parent)
         paths::isMobile() ? 54 : 16, 0, 0, 41);
     webSearchButton_->setGlyph(GlyphButton::Glyph::Globe);
     webSearchButton_->setLabel(webLabel);
+    webSearchButton_->setVisible(false);
     webSearchButton_->onClick = [this](sg::MouseEvent&)
     {
+        if (!webSearchAvailable_)
+            return;
         setWebSearchEnabled(!webSearchEnabled_);
         if (onWebSearchToggle)
             onWebSearchToggle(webSearchEnabled_);
@@ -589,7 +592,17 @@ void ChatPanel::setWebSearchEnabled(bool enabled)
 {
     webSearchEnabled_ = enabled;
     if (webSearchButton_)
-        webSearchButton_->setActive(enabled);
+        webSearchButton_->setActive(enabled && webSearchAvailable_);
+}
+
+void ChatPanel::setWebSearchAvailable(bool available)
+{
+    webSearchAvailable_ = available;
+    if (!webSearchButton_)
+        return;
+
+    webSearchButton_->setVisible(available);
+    webSearchButton_->setActive(available && webSearchEnabled_);
 }
 
 void ChatPanel::onFontChanged()

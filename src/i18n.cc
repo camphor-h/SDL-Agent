@@ -185,6 +185,9 @@ const Strings kZh = {
     /*webSearchReserved*/ "Web 搜索（预留，暂未启用）",
     /*webSearchButton*/ "联网搜索",
     /*mobileToolsNote*/ "当前平台未启用工具；不要尝试调用工具，直接根据对话回答。",
+    /*pasteTruncated*/ "粘贴内容过长，已截断。",
+    /*sources*/ "来源",
+    /*webSearchNote*/ "已启用联网搜索。回答需要最新信息时请直接搜索，并在回答中列出来源；不要声称自己没有联网能力。",
 };
 
 const Strings kEn = {
@@ -365,6 +368,9 @@ const Strings kEn = {
     /*webSearchReserved*/ "Web search (reserved, not enabled yet)",
     /*webSearchButton*/ "Web search",
     /*mobileToolsNote*/ "No tools are enabled on this platform; answer from the conversation without calling tools.",
+    /*pasteTruncated*/ "Pasted text was truncated.",
+    /*sources*/ "Sources",
+    /*webSearchNote*/ "Web search is enabled. When the answer needs current information, search and list your sources; do not claim that you cannot access the internet.",
 };
 
 Lang gLang = Lang::Zh;

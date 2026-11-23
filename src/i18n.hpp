@@ -204,6 +204,9 @@ struct Strings
     const char* webSearchReserved;
     const char* webSearchButton;
     const char* mobileToolsNote;
+    const char* pasteTruncated;
+    const char* sources;
+    const char* webSearchNote;
 };
 
 const Strings& tr();

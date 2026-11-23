@@ -7,6 +7,7 @@
 #include "attachments.hpp"
 #include "camera.hpp"
 #include "chat_panel.hpp"
+#include "clipboard.hpp"
 #include "dialogs.hpp"
 #include "filepick.hpp"
 #include "font.hpp"
@@ -14,6 +15,7 @@
 #include "ime.hpp"
 #include "log.hpp"
 #include "model_catalog.hpp"
+#include "native_search.hpp"
 #include "paths.hpp"
 #include "prompt.hpp"
 #include "provider_presets.hpp"
@@ -216,6 +218,86 @@ void SDLCALL saveFilePicked(void* userdata, const char* const* files, int)
         ctx->done(files[0]);
 }
 
+bool isUtf8Continuation(unsigned char c)
+{
+    return (c & 0xC0) == 0x80;
+}
+
+//Clipboard text from Windows apps usually has CRLF line endings and may carry
+//other control characters. Normalize it and cap the size so a huge paste
+//cannot stall the text layout.
+std::string sanitizePastedText(const std::string& in)
+{
+    constexpr std::size_t kMaxPasteBytes = 256 * 1024;
+
+    std::string out;
+    out.reserve(std::min<std::size_t>(in.size(), kMaxPasteBytes));
+
+    std::size_t i = 0;
+    //Drop a UTF-8 BOM if the source app included one.
+    if (in.size() >= 3 && (unsigned char)in[0] == 0xEF &&
+        (unsigned char)in[1] == 0xBB && (unsigned char)in[2] == 0xBF)
+        i = 3;
+
+    bool truncated = false;
+    for (; i < in.size(); ++i)
+    {
+        unsigned char c = (unsigned char)in[i];
+
+        if (c == '\r')
+        {
+            //CRLF becomes LF; a lone CR also becomes LF.
+            if (i + 1 < in.size() && in[i + 1] == '\n')
+                continue;
+            c = '\n';
+        }
+        else if (c < 0x20 && c != '\n' && c != '\t')
+        {
+            continue;
+        }
+        else if (c == 0x7F)
+        {
+            continue;
+        }
+
+        if (out.size() >= kMaxPasteBytes)
+        {
+            truncated = true;
+            break;
+        }
+        out.push_back((char)c);
+    }
+
+    if (truncated)
+    {
+        //Do not end on a half-written UTF-8 sequence.
+        std::size_t cont = 0;
+        while (!out.empty() && isUtf8Continuation((unsigned char)out.back()))
+        {
+            out.pop_back();
+            ++cont;
+        }
+        if (!out.empty())
+        {
+            unsigned char lead = (unsigned char)out.back();
+            std::size_t need = 1;
+            if ((lead & 0xE0) == 0xC0)
+                need = 2;
+            else if ((lead & 0xF0) == 0xE0)
+                need = 3;
+            else if ((lead & 0xF8) == 0xF0)
+                need = 4;
+            if (cont + 1 < need)
+                out.pop_back();
+        }
+
+        out += "\n\n";
+        out += tr().pasteTruncated;
+    }
+
+    return out;
+}
+
 Lang detectSystemLanguage()
 {
     int count = 0;
@@ -275,7 +357,9 @@ App::App(bool openSettingsOnStart, std::string initialSessionId)
     setLang(config_.lang);
 
     gui_.setFPS(60);
-    gui_.setUiScale(config_.uiScale);
+    //Desktop UI zoom is fixed at 100% so every machine gets the same layout.
+    //Mobile applies the device density after the window exists.
+    gui_.setUiScale(1.0f);
 
     {
         std::string fontErr;
@@ -501,8 +585,128 @@ Uint32 SDLCALL App::logTimerProc(void* userdata, SDL_TimerID, Uint32)
 
 int App::run()
 {
+    SDL_SetEventFilter(&App::eventFilter, this);
     gui_.run();
+    SDL_SetEventFilter(nullptr, nullptr);
     return 0;
+}
+
+bool SDLCALL App::eventFilter(void* userdata, SDL_Event* event)
+{
+    App* app = static_cast<App*>(userdata);
+    return app && event ? app->handleAppEvent(*event) : true;
+}
+
+bool App::handleAppEvent(SDL_Event& ev)
+{
+    if (ev.type == SDL_EVENT_KEY_DOWN)
+    {
+        const SDL_Keymod mod = (SDL_Keymod)ev.key.mod;
+        const bool ctrl = (mod & SDL_KMOD_CTRL) != 0;
+        const bool other = (mod & (SDL_KMOD_SHIFT | SDL_KMOD_ALT |
+                                   SDL_KMOD_GUI)) != 0;
+
+        //Intercept Ctrl+V so clipboard text is cleaned before insertion.
+        //Other modifier combinations keep SDLGui's default handling.
+        if (ev.key.key == SDLK_V && ctrl && !other)
+            return !pasteFromClipboard();
+        return true;
+    }
+
+    if (ev.type == SDL_EVENT_DROP_FILE)
+    {
+        handleDroppedFile(ev.drop.data);
+        return true;
+    }
+
+    return true;
+}
+
+bool App::pasteFromClipboard()
+{
+    sg::Widget* focus = gui_.focused();
+    if (!focus)
+        return false;
+
+    auto* tb = dynamic_cast<sg::TextBox*>(focus);
+    auto* ta = dynamic_cast<sg::TextArea*>(focus);
+    auto* cb = dynamic_cast<sg::ComboBox*>(focus);
+    if (!tb && !ta && !cb)
+        return false;
+
+    //Files copied in a file manager attach only when the composer has focus.
+    if (chat_ && focus == chat_->inputWidget() && canAttachFiles())
+    {
+        std::vector<std::string> files = clipboard::files();
+        if (!files.empty())
+        {
+            attachFiles(files);
+            return true;
+        }
+    }
+
+    char* clip = SDL_GetClipboardText();
+    if (!clip)
+        return true;
+
+    std::string text = sanitizePastedText(std::string(clip));
+    SDL_free(clip);
+
+    if (text.empty())
+        return true;
+
+    if (tb)
+        tb->insertText(text);
+    else if (ta)
+        ta->insertText(text);
+    else
+        cb->insertText(text);
+    return true;
+}
+
+void App::handleDroppedFile(const char* path)
+{
+    if (!path || !*path || !canAttachFiles())
+        return;
+    attachFiles({ path });
+}
+
+bool App::canAttachFiles() const
+{
+    if (!chat_ || !chat_->visible())
+        return false;
+
+    //Only the chat page accepts files. Dialogs and the mobile drawer are
+    //overlays, so actions there must do nothing.
+    if (settingsDialog_ && settingsDialog_->isOpen())
+        return false;
+    if (inputDialog_ && inputDialog_->isOpen())
+        return false;
+    if (confirmDialog_ && confirmDialog_->isOpen())
+        return false;
+    if (drawer_ && drawer_->isOpen())
+        return false;
+    return true;
+}
+
+void App::attachFiles(const std::vector<std::string>& paths)
+{
+    if (!chat_)
+        return;
+
+    std::string firstError;
+    for (const std::string& path : paths)
+    {
+        std::string err;
+        chat_->addPickedFile(path, err);
+        if (firstError.empty() && !err.empty())
+            firstError = err;
+    }
+
+    if (!firstError.empty() && win_)
+        win_->showMessageBox(tr().attach, firstError.c_str(),
+                             sg::MessageBoxType::Warning,
+                             sg::MessageBoxButtons::OK, nullptr);
 }
 
 void App::buildUi()
@@ -619,6 +823,7 @@ void App::buildUi()
             log::writef("%s", err.c_str());
     };
     chat_->setWebSearchEnabled(config_.webSearch);
+    updateWebSearchAvailability();
     chat_->onConfirmation = [this](ui::ChatPanel::ConfirmChoice choice)
     {
         if (!engine_.busy())
@@ -1244,6 +1449,19 @@ AgentRunConfig App::makeRunConfig(const std::string& sessionId) const
         rc.imageInput = true;
     rc.toolMode = config_.toolMode;
 
+    //Re-resolve on every run so a profile or model switch can never leave a
+    //stale "supports search" flag behind.
+    native_search::Plan plan;
+    if (config_.webSearch)
+    {
+        plan = native_search::resolve(config_.baseUrl, config_.model,
+                                      config_.apiProtocol);
+        if (plan.mode == native_search::Plan::Mode::RawTool)
+            rc.nativeWebTool = plan.toolJson;
+        else if (plan.mode == native_search::Plan::Mode::ChatOptions)
+            rc.nativeWebChatOptions = true;
+    }
+
     std::string sysText = prompt::readFile(paths::sysPromptFile(),
                                            prompt::defaultSysPrompt());
     std::string toolText = prompt::readFile(paths::toolPromptFile(),
@@ -1251,7 +1469,25 @@ AgentRunConfig App::makeRunConfig(const std::string& sessionId) const
     rc.systemPrompt = prompt::compose(
         sysText, toolText, config_.toolMode != ToolMode::Off,
         SDL_GetPlatform(), paths::toUtf8(rc.workspace), config_.model);
+
+    //Without this the model tends to answer "I cannot access the internet"
+    //even though the server-side search tool is declared.
+    if (native_search::supported(plan))
+    {
+        rc.systemPrompt += "\n\n";
+        rc.systemPrompt += tr().webSearchNote;
+    }
     return rc;
+}
+
+void App::updateWebSearchAvailability()
+{
+    if (!chat_)
+        return;
+
+    native_search::Plan plan = native_search::resolve(
+        config_.baseUrl, config_.model, config_.apiProtocol);
+    chat_->setWebSearchAvailable(native_search::supported(plan));
 }
 
 std::string App::effectiveWorkspace() const
@@ -1992,10 +2228,8 @@ bool App::saveConfigFromDialog(const Config& cfg, std::string& err)
     if (!saveConfig(paths::configFile(), next, err))
         return false;
 
-    //The font raster scale follows the window UI scale, so update it first.
-    if (!paths::isMobile())
-        gui_.setUiScale(next.uiScale);
-
+    //The font raster scale follows the current UI scale, which is derived
+    //from the display; only the font settings itself change here.
     {
         std::string fontErr;
         if (!font::apply(next, fontErr))
@@ -2018,12 +2252,10 @@ bool App::saveConfigFromDialog(const Config& cfg, std::string& err)
         bool imageSupport = catalog::supportsImage(config_.model, &foundModel);
         chat_->setImageInputSupported(!foundModel || imageSupport);
     }
+    updateWebSearchAvailability();
     updateUsageUi();
     updateTopbar();
     refreshSidebar();
-
-    if (!paths::isMobile())
-        gui_.setUiScale(config_.uiScale);
 
     win_->requestRedraw();
     return true;
