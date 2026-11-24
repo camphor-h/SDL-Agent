@@ -22,6 +22,7 @@ void setDataDir(const std::filesystem::path& dir);
 const std::filesystem::path& sysPromptFile();
 const std::filesystem::path& toolPromptFile();
 const std::filesystem::path& titlePromptFile();
+const std::filesystem::path& globalAgentsFile();
 const std::filesystem::path& apiCatalogFile();
 const std::filesystem::path& attachmentsConfigFile();
 const std::filesystem::path& gatewaysFile();

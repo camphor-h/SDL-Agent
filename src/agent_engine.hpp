@@ -43,6 +43,9 @@ struct AgentRunConfig
     //Provider-native web search, resolved by the app from the capability table.
     std::string nativeWebTool; //raw tool object; empty = disabled
     bool        nativeWebChatOptions = false; //OpenAI Chat search models
+    //Frozen prompt inputs for this conversation.
+    uint64_t    sessionStartedAt = 0;
+    std::string agentsText;
 };
 
 struct ConfirmationData

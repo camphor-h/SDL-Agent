@@ -116,6 +116,8 @@ ChatView::ChatView(sg::Widget* parent)
     setLineSpacing(3);
     scrollbarV(true);
     scrollbarH(false);
+    //Chat text always wraps; never pan sideways into blank space.
+    setPanningEnabled(false, true);
     setSelectable(true);
 
     //A 6px bar keeps the text area readable; keep a wider drag target.

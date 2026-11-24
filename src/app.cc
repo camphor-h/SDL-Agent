@@ -4,6 +4,7 @@
 
 #include "icon_data.inc"
 
+#include "agents.hpp"
 #include "attachments.hpp"
 #include "camera.hpp"
 #include "chat_panel.hpp"
@@ -401,6 +402,11 @@ App::App(bool openSettingsOnStart, std::string initialSessionId)
 
     gui_.onBackPressed = [this]
     {
+        if (agentsDialog_ && agentsDialog_->isOpen())
+        {
+            agentsDialog_->close();
+            return;
+        }
         if (settingsDialog_ && settingsDialog_->isOpen())
         {
             settingsDialog_->back();
@@ -445,14 +451,6 @@ App::App(bool openSettingsOnStart, std::string initialSessionId)
     win_->setTitleIconPadding(10, 8);
     win_->setWindowIconMemory(sdlagent::icon::kPng,
                               sdlagent::icon::kPngSize);
-
-    if (win_->handle())
-    {
-        int ww = 0, wh = 0;
-        SDL_GetWindowSize(win_->handle(), &ww, &wh);
-        imeBaseWindowH_ = wh;
-        SDL_AddEventWatch(&App::imeResizeWatch, this);
-    }
 
     buildUi();
     buildDialogs();
@@ -537,37 +535,12 @@ App::App(bool openSettingsOnStart, std::string initialSessionId)
 
 App::~App()
 {
-    SDL_RemoveEventWatch(&App::imeResizeWatch, this);
     if (logTimer_)
     {
         SDL_RemoveTimer(logTimer_);
         logTimer_ = 0;
     }
     stopTitleWorker();
-}
-
-bool SDLCALL App::imeResizeWatch(void* userdata, SDL_Event* event)
-{
-    auto* app = static_cast<App*>(userdata);
-    if (!app || !event)
-        return false;
-
-    if (event->type == SDL_EVENT_WINDOW_DISPLAY_CHANGED)
-    {
-        app->imeBaseWindowH_ = 0;
-        return false;
-    }
-
-    if ((event->type == SDL_EVENT_WINDOW_RESIZED ||
-         event->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) &&
-        app->imeInsetPx_ <= 0 && app->win_ && app->win_->handle())
-    {
-        int w = 0, h = 0;
-        SDL_GetWindowSize(app->win_->handle(), &w, &h);
-        if (h > app->imeBaseWindowH_)
-            app->imeBaseWindowH_ = h;
-    }
-    return false;
 }
 
 Uint32 SDLCALL App::logTimerProc(void* userdata, SDL_TimerID, Uint32)
@@ -606,10 +579,10 @@ bool App::handleAppEvent(SDL_Event& ev)
         const bool other = (mod & (SDL_KMOD_SHIFT | SDL_KMOD_ALT |
                                    SDL_KMOD_GUI)) != 0;
 
-        //Intercept Ctrl+V so clipboard text is cleaned before insertion.
-        //Other modifier combinations keep SDLGui's default handling.
+        //Intercept Ctrl+V only for file clipboards; text stays with SDLGui so
+        //its PasteFilter hook performs the insertion.
         if (ev.key.key == SDLK_V && ctrl && !other)
-            return !pasteFromClipboard();
+            return pasteFromClipboard();
         return true;
     }
 
@@ -626,13 +599,7 @@ bool App::pasteFromClipboard()
 {
     sg::Widget* focus = gui_.focused();
     if (!focus)
-        return false;
-
-    auto* tb = dynamic_cast<sg::TextBox*>(focus);
-    auto* ta = dynamic_cast<sg::TextArea*>(focus);
-    auto* cb = dynamic_cast<sg::ComboBox*>(focus);
-    if (!tb && !ta && !cb)
-        return false;
+        return true;
 
     //Files copied in a file manager attach only when the composer has focus.
     if (chat_ && focus == chat_->inputWidget() && canAttachFiles())
@@ -641,26 +608,31 @@ bool App::pasteFromClipboard()
         if (!files.empty())
         {
             attachFiles(files);
-            return true;
+            return false; // consume Ctrl+V, SDLGui must not paste text
         }
     }
 
-    char* clip = SDL_GetClipboardText();
-    if (!clip)
-        return true;
-
-    std::string text = sanitizePastedText(std::string(clip));
-    SDL_free(clip);
-
-    if (text.empty())
-        return true;
-
-    if (tb)
-        tb->insertText(text);
-    else if (ta)
-        ta->insertText(text);
-    else
-        cb->insertText(text);
+    //Text paste is left to SDLGui, which now calls the widget's paste filter.
+    //Install the sanitizer lazily so every dialog text box gets it too.
+    auto install = [](sg::Widget* w)
+    {
+        if (auto* tb = dynamic_cast<sg::TextBox*>(w))
+        {
+            if (!tb->pasteFilter())
+                tb->setPasteFilter(sanitizePastedText);
+        }
+        else if (auto* ta = dynamic_cast<sg::TextArea*>(w))
+        {
+            if (!ta->pasteFilter())
+                ta->setPasteFilter(sanitizePastedText);
+        }
+        else if (auto* cb = dynamic_cast<sg::ComboBox*>(w))
+        {
+            if (!cb->pasteFilter())
+                cb->setPasteFilter(sanitizePastedText);
+        }
+    };
+    install(focus);
     return true;
 }
 
@@ -972,6 +944,8 @@ void App::applyTheme(const std::string& themeName)
     }
     if (settingsDialog_)
         settingsDialog_->applyTheme(theme);
+    if (agentsDialog_)
+        agentsDialog_->applyTheme(theme);
     if (inputDialog_)
         inputDialog_->applyTheme(theme);
     if (confirmDialog_)
@@ -1171,6 +1145,8 @@ void App::createSession()
          current->title.rfind(tr().untitled, 0) == 0))
     {
         //already on an empty new conversation: keep it
+        if (drawer_ && drawer_->isOpen())
+            drawer_->close();
         if (chat_)
             gui_.setFocus(chat_->inputWidget());
         return;
@@ -1184,6 +1160,8 @@ void App::createSession()
             currentId_ = existing.id;
             refreshSidebar();
             selectSession(existing.id);
+            if (drawer_ && drawer_->isOpen())
+                drawer_->close();
             if (chat_)
                 gui_.setFocus(chat_->inputWidget());
             return;
@@ -1429,8 +1407,16 @@ void App::deleteSession(const std::string& id)
     refreshSidebar();
 }
 
-AgentRunConfig App::makeRunConfig(const std::string& sessionId) const
+AgentRunConfig App::makeRunConfig(const std::string& sessionId)
 {
+    const Session* session = store_.find(sessionId);
+    const std::string workspace =
+        (session && !session->workspace.empty()) ? session->workspace
+                                                 : effectiveWorkspace();
+    const std::string agents =
+        session ? session->agentsText : std::string();
+    const uint64_t startedAt = session ? session->createdAt : 0;
+
     AgentRunConfig rc;
     rc.baseUrl = config_.baseUrl;
     rc.apiKey = config_.apiKey;
@@ -1441,7 +1427,7 @@ AgentRunConfig App::makeRunConfig(const std::string& sessionId) const
                                       sessionId);
     rc.temperature = config_.temperature;
     rc.maxTokens = config_.maxTokens;
-    rc.workspace = paths::defaultWorkspace();
+    rc.workspace = paths::fromUtf8(workspace);
     rc.sessionsRoot = store_.root();
     bool foundModel = false;
     rc.imageInput = catalog::supportsImage(config_.model, &foundModel);
@@ -1451,16 +1437,21 @@ AgentRunConfig App::makeRunConfig(const std::string& sessionId) const
 
     //Re-resolve on every run so a profile or model switch can never leave a
     //stale "supports search" flag behind.
-    native_search::Plan plan;
-    if (config_.webSearch)
-    {
-        plan = native_search::resolve(config_.baseUrl, config_.model,
-                                      config_.apiProtocol);
-        if (plan.mode == native_search::Plan::Mode::RawTool)
-            rc.nativeWebTool = plan.toolJson;
-        else if (plan.mode == native_search::Plan::Mode::ChatOptions)
-            rc.nativeWebChatOptions = true;
-    }
+    native_search::Plan plan = native_search::resolve(
+        config_.baseUrl, config_.model, config_.apiProtocol);
+
+    //Keep the server-side search tool declared for the whole conversation so
+    //the tools array is stable; a notice tells the model whether it may be
+    //used. OpenAI Chat search models always search, so that parameter stays
+    //tied to the toggle.
+    if (plan.mode == native_search::Plan::Mode::RawTool)
+        rc.nativeWebTool = plan.toolJson;
+    else if (plan.mode == native_search::Plan::Mode::ChatOptions &&
+             config_.webSearch)
+        rc.nativeWebChatOptions = true;
+
+    rc.sessionStartedAt = startedAt;
+    rc.agentsText = agents;
 
     std::string sysText = prompt::readFile(paths::sysPromptFile(),
                                            prompt::defaultSysPrompt());
@@ -1468,15 +1459,7 @@ AgentRunConfig App::makeRunConfig(const std::string& sessionId) const
                                             prompt::defaultToolPrompt());
     rc.systemPrompt = prompt::compose(
         sysText, toolText, config_.toolMode != ToolMode::Off,
-        SDL_GetPlatform(), paths::toUtf8(rc.workspace), config_.model);
-
-    //Without this the model tends to answer "I cannot access the internet"
-    //even though the server-side search tool is declared.
-    if (native_search::supported(plan))
-    {
-        rc.systemPrompt += "\n\n";
-        rc.systemPrompt += tr().webSearchNote;
-    }
+        SDL_GetPlatform(), workspace, config_.model, agents, startedAt);
     return rc;
 }
 
@@ -1493,6 +1476,68 @@ void App::updateWebSearchAvailability()
 std::string App::effectiveWorkspace() const
 {
     return paths::toUtf8(paths::defaultWorkspace());
+}
+
+void App::prepareSessionPromptState(Session& s)
+{
+    if (s.workspace.empty())
+        s.workspace = effectiveWorkspace();
+
+    agents::Snapshot snapshot = agents::load(
+        paths::globalAgentsFile(),
+        paths::fromUtf8(s.workspace) / "AGENTS.md");
+
+    if (s.agentsHash.empty())
+    {
+        //First send: seed the frozen text; nothing to announce yet.
+        s.agentsText = snapshot.text;
+        s.agentsHash = snapshot.hash;
+    }
+    else if (snapshot.hash != s.agentsHash)
+    {
+        Message notice;
+        notice.role = Role::System;
+        notice.hidden = true;
+        notice.content = snapshot.text.empty()
+                             ? std::string(tr().agentsRemoved)
+                             : std::string(tr().agentsUpdated) + "\n" +
+                                   snapshot.text;
+        notice.timestamp = nowMs();
+        s.messages.push_back(std::move(notice));
+        s.agentsText = snapshot.text;
+        s.agentsHash = snapshot.hash;
+    }
+
+    int web = config_.webSearch ? 1 : 0;
+    if (s.webSearchState != web)
+    {
+        Message notice;
+        notice.role = Role::System;
+        notice.hidden = true;
+        notice.content = std::string("[状态] ") +
+                         (web ? tr().webSearchOn : tr().webSearchOff);
+        notice.timestamp = nowMs();
+        s.messages.push_back(std::move(notice));
+        s.webSearchState = web;
+    }
+
+    int mode = (int)config_.toolMode;
+    if (s.toolModeState != mode)
+    {
+        const char* label = config_.toolMode == ToolMode::Off
+                                ? tr().toolsOff
+                                : (config_.toolMode == ToolMode::Auto
+                                       ? tr().toolsAuto
+                                       : tr().toolsAsk);
+        Message notice;
+        notice.role = Role::System;
+        notice.hidden = true;
+        notice.content = std::string("[状态] ") + tr().toolModeLabel +
+                         "：" + label;
+        notice.timestamp = nowMs();
+        s.messages.push_back(std::move(notice));
+        s.toolModeState = mode;
+    }
 }
 
 void App::sendMessage(const std::string& text)
@@ -1578,6 +1623,10 @@ void App::sendMessage(const std::string& text)
         }
         imported.push_back(std::move(stored));
     }
+
+    //Append state changes and AGENTS.md updates before the new user message so
+    //the existing prefix is preserved and only the tail grows.
+    prepareSessionPromptState(*s);
 
     Message msg;
     msg.role = Role::User;
@@ -1696,34 +1745,20 @@ void App::applyImeInset(int px)
     int ww = 0, wh = 0;
     SDL_GetWindowSize(win_->handle(), &ww, &wh);
 
-    if (px <= 0)
-    {
-        if (wh > 0 && (imeBaseWindowH_ <= 0 || wh > imeBaseWindowH_))
-            imeBaseWindowH_ = wh;
-        gui_.setKeyboardInset(0);
-        if (win_)
-            win_->requestRedraw();
-        return;
-    }
-
-    if (imeBaseWindowH_ <= 0)
-        imeBaseWindowH_ = wh;
-
-    //Some devices resize the SDL window for the IME even with
-    //ADJUST_NOTHING. Only subtract the part the window has not already lost.
-    int already = std::max(0, imeBaseWindowH_ - wh);
-    int effective = std::max(0, px - already);
-
     float scale = gui_.uiScale();
     if (scale < 0.01f)
         scale = 1.0f;
 
-    int logical = (int)std::lround((double)effective / (double)scale);
+    //SDLGui compares the current client height with its un-keyboarded
+    //baseline, so pass the full IME height. It will not subtract twice when
+    //the OS has already resized the window.
+    int logical = px > 0
+                      ? (int)std::lround((double)px / (double)scale)
+                      : 0;
     gui_.setKeyboardInset(logical);
 
-    log::writef("ime px=%d win=%dx%d base=%d scale=%.2f effective=%d logical=%d",
-                px, ww, wh, imeBaseWindowH_, (double)scale, effective,
-                logical);
+    log::writef("ime px=%d win=%dx%d scale=%.2f logical=%d",
+                px, ww, wh, (double)scale, logical);
 
     //Window::layoutRoot refreshes the SDL IME anchor after resizing the root.
     if (win_)
@@ -1744,7 +1779,10 @@ void App::updateUsageUi()
                 continue;
             if (it->promptTokens <= 0 && it->completionTokens <= 0)
                 continue;
-            tokens = it->promptTokens + it->completionTokens;
+            //Use the prompt size (the context actually sent) so the number
+            //grows with the conversation instead of jumping with each
+            //answer's length.
+            tokens = it->promptTokens;
             break;
         }
     }
@@ -1794,7 +1832,10 @@ void App::onAgentEvents()
 
     if (due)
     {
-        chat_->refresh(force);
+        //Do not force a jump to the bottom here: the user may have scrolled
+        //up to read something while the answer was streaming. ChatPanel only
+        //follows new content when the view was already near the bottom.
+        chat_->refresh(false);
         lastRefresh_ = now;
     }
 }
@@ -2156,6 +2197,23 @@ void App::createSettingsDialog()
             else
                 gui_.setFocus(chat_ ? chat_->inputWidget() : nullptr);
         });
+    settingsDialog_->onEditAgents = [this]
+    {
+        if (agentsDialog_)
+            agentsDialog_->open(paths::globalAgentsFile());
+    };
+
+    //Created after the settings modal so it renders on top of it.
+    agentsDialog_ = std::make_unique<ui::AgentsDialog>(
+        &win_->root(),
+        [this]
+        {
+            if (settingsDialog_ && settingsDialog_->isOpen())
+                gui_.setFocus(settingsDialog_->firstField());
+            else
+                gui_.setFocus(chat_ ? chat_->inputWidget() : nullptr);
+        });
+
     settingsLineHeight_ =
         sg::currentFont() ? sg::currentFont()->lineHeight() : 0;
 }

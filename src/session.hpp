@@ -57,6 +57,9 @@ struct Message
 
     uint64_t timestamp = 0;
 
+    //Hidden state/instruction notice: replayed in the request but not shown.
+    bool hidden = false;
+
     //UI-only flags, never persisted
     bool streaming = false;
     bool error     = false;
@@ -77,6 +80,15 @@ struct Session
     bool        pinned = false;
     uint64_t    createdAt = 0;
     uint64_t    updatedAt = 0;
+
+    //Frozen at the first send so the prompt prefix stays byte-identical.
+    std::string workspace;
+    std::string agentsText;
+    std::string agentsHash;
+
+    //Last state announced to the model (-1 = not announced yet).
+    int webSearchState = -1; //0 off, 1 on
+    int toolModeState  = -1; //ToolMode value
 
     //model used for the latest request (informational)
     std::string model;

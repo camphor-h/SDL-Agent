@@ -9,6 +9,7 @@
 #include "sdlgui.hpp"
 
 #include <atomic>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -65,6 +66,8 @@ public:
 
     sdlgui::Widget* firstField() const;
 
+    std::function<void()> onEditAgents;
+
 private:
     void build(sdlgui::Widget* root);
     void accept();
@@ -108,6 +111,7 @@ private:
     SessionList*      profileList_ = nullptr;
     sdlgui::Button*   newProfile_ = nullptr;
     sdlgui::Button*   deleteProfile_ = nullptr;
+    sdlgui::Button*   agentsButton_ = nullptr;
     sdlgui::Button*   saveProfile_ = nullptr;
     sdlgui::Button*   back_ = nullptr;
     std::vector<ApiProfile> profiles_;
@@ -239,6 +243,35 @@ private:
     sdlgui::Button*   allow_ = nullptr;
     std::function<void(ConfirmDecision)> onDecision_;
     std::function<void()>                onClosed_;
+};
+
+//Standalone multi-line editor for the global AGENTS.md.
+class AgentsDialog
+{
+public:
+    AgentsDialog(sdlgui::Widget* root, std::function<void()> onClosed);
+    ~AgentsDialog();
+
+    void open(const std::filesystem::path& file);
+    void close();
+    bool isOpen() const;
+    void applyTheme(const sdlgui::Theme& theme);
+
+private:
+    void layoutPanel(int w, int h);
+    void save();
+
+    Modal*  modal_ = nullptr;
+    Panel*  panel_ = nullptr;
+    sdlgui::Label*    title_ = nullptr;
+    sdlgui::Label*    hint_ = nullptr;
+    sdlgui::TextArea* text_ = nullptr;
+    sdlgui::Label*    error_ = nullptr;
+    sdlgui::Button*   save_ = nullptr;
+    sdlgui::Button*   cancel_ = nullptr;
+
+    std::filesystem::path file_;
+    std::function<void()> onClosed_;
 };
 
 //SDLEdit-style font picker: font list, rendered preview, size.

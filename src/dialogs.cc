@@ -19,6 +19,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <fstream>
 
 namespace sdlagent::ui
 {
@@ -461,6 +462,16 @@ void SettingsDialog::build(sg::Widget* root)
     showReasoning_->setText(tr().showReasoning);
     y += checkH + 20;
 
+    agentsButton_ = appearanceContent_->addChild<sg::Button>();
+    agentsButton_->pos(0, y)->sz(220, std::max(32, lh + 10));
+    agentsButton_->setText(tr().editAgents);
+    agentsButton_->onClick = [this](sg::MouseEvent&)
+    {
+        if (onEditAgents)
+            onEditAgents();
+    };
+    y += std::max(32, lh + 10) + 14;
+
     fontSectionLabel_ = addLabel(appearanceContent_, 0, y, 240,
                                  tr().fontSection,
                                  sg::Color(200, 203, 210));
@@ -657,6 +668,9 @@ void SettingsDialog::build(sg::Widget* root)
                           "https://github.com/camphor-h/SDL-Agent",
                           sg::Color(50, 110, 190));
     aboutLink_->setTextAlign(sg::RichTextAlign::Center);
+    //The URL is wider than a phone screen; wrap it instead of clipping (or
+    //re-enabling horizontal panning).
+    aboutLink_->setWordWrap(true);
     aboutLink_->onClick = [](sg::MouseEvent&)
     {
         SDL_OpenURL("https://github.com/camphor-h/SDL-Agent");
@@ -1862,6 +1876,188 @@ void ConfirmDialog::applyTheme(const sg::Theme& theme)
         title_->setTextColor(theme.dialogTitleText);
     if (summary_)
         summary_->setTextColor(theme.menuAccent);
+}
+
+//==============================================================================
+// AgentsDialog
+//==============================================================================
+
+AgentsDialog::AgentsDialog(sg::Widget* root, std::function<void()> onClosed)
+    : onClosed_(std::move(onClosed))
+{
+    modal_ = root->addChild<Modal>();
+    modal_->pos(0, 0)->sz(root->width(), root->height());
+    modal_->setAnchors(sg::AnchorLeft | sg::AnchorTop | sg::AnchorRight |
+                           sg::AnchorBottom,
+                       0, 0, 0, 0);
+
+    panel_ = modal_->addChild<Panel>();
+    panel_->pos(0, 0)->sz(760, 600);
+    panel_->setColors(sg::Color(38, 40, 46), sg::Color(70, 73, 80), 1);
+    modal_->setPanel(panel_);
+    modal_->setResponsivePanel(true, 16, 16, 320, 280, 760, 600);
+    modal_->onPanelSize = [this](int w, int h) { layoutPanel(w, h); };
+
+    title_ = addLabel(panel_, 20, 14, 400, tr().agentsEditorTitle,
+                      sg::Color(226, 228, 233));
+    hint_ = addLabel(panel_, 20, 40, 600, tr().agentsEditorHint,
+                     sg::Color(150, 153, 160));
+    hint_->setWordWrap(true);
+
+    text_ = panel_->addChild<sg::TextArea>();
+    text_->setWordWrap(true);
+    text_->setLineSpacing(2);
+    text_->scrollbarV(true);
+    text_->onKeyDown = [this](sg::KeyEvent& e)
+    {
+        if (e.key == SDLK_ESCAPE)
+            close();
+    };
+
+    error_ = addLabel(panel_, 20, 0, 300, "", sg::Color(235, 110, 110));
+
+    save_ = panel_->addChild<sg::Button>();
+    save_->setText(tr().save);
+    save_->onClick = [this](sg::MouseEvent&) { save(); };
+
+    cancel_ = panel_->addChild<sg::Button>();
+    cancel_->setText(tr().cancel);
+    cancel_->onClick = [this](sg::MouseEvent&) { close(); };
+
+    modal_->hideModal();
+}
+
+AgentsDialog::~AgentsDialog()
+{
+    if (modal_ && modal_->parent())
+        modal_->parent()->removeChild(modal_);
+}
+
+void AgentsDialog::layoutPanel(int w, int h)
+{
+    const int pad = 20;
+    const int btnH = 34;
+    const int gap = 8;
+    const int bottom = 16;
+
+    if (title_)
+        title_->setSize(std::max(80, w - pad * 2), 20);
+
+    int hintH = 18;
+    if (hint_)
+    {
+        int hintW = std::max(80, w - pad * 2);
+        hint_->setPosition(pad, 38);
+        hint_->setSize(hintW, hint_->preferredHeight(hintW));
+        hintH = hint_->height();
+    }
+
+    const int top = 38 + hintH + 8;
+    const int btnY = h - bottom - btnH;
+    const int errH = 18;
+
+    if (error_)
+    {
+        error_->setPosition(pad, btnY - errH - 4);
+        error_->setSize(std::max(80, w - pad * 2), errH);
+    }
+
+    const int textBottom = btnY - errH - 12;
+    if (text_)
+    {
+        text_->setPosition(pad, top);
+        text_->setSize(std::max(80, w - pad * 2),
+                       std::max(60, textBottom - top));
+    }
+
+    const int totalW = std::max(80, w - pad * 2);
+    const int btnW = (totalW - gap) / 2;
+    if (save_)
+    {
+        save_->setPosition(pad, btnY);
+        save_->setSize(btnW, btnH);
+    }
+    if (cancel_)
+    {
+        cancel_->setPosition(pad + btnW + gap, btnY);
+        cancel_->setSize(totalW - btnW - gap, btnH);
+    }
+}
+
+void AgentsDialog::open(const std::filesystem::path& file)
+{
+    file_ = file;
+
+    std::ifstream in(file_, std::ios::binary);
+    std::string text;
+    if (in)
+        text.assign((std::istreambuf_iterator<char>(in)),
+                    std::istreambuf_iterator<char>());
+
+    text_->setText(text);
+    text_->clearSelection();
+    error_->setText("");
+
+    modal_->showModal();
+    layoutPanel(panel_->width(), panel_->height());
+
+    if (auto* app = sg::Application::instance())
+        app->setFocus(text_);
+}
+
+void AgentsDialog::close()
+{
+    modal_->hideModal();
+    if (onClosed_)
+        onClosed_();
+}
+
+bool AgentsDialog::isOpen() const
+{
+    return modal_ && modal_->isOpen();
+}
+
+void AgentsDialog::save()
+{
+    std::error_code ec;
+    if (!file_.parent_path().empty())
+        std::filesystem::create_directories(file_.parent_path(), ec);
+
+    std::ofstream out(file_, std::ios::binary | std::ios::trunc);
+    if (!out)
+    {
+        error_->setText(tr().agentsSaveFailed);
+        return;
+    }
+
+    const std::string text = text_->text();
+    out.write(text.data(), (std::streamsize)text.size());
+    if (!out)
+    {
+        error_->setText(tr().agentsSaveFailed);
+        return;
+    }
+
+    close();
+}
+
+void AgentsDialog::applyTheme(const sg::Theme& theme)
+{
+    if (modal_)
+        modal_->setOverlayColor(theme.overlay);
+    if (panel_)
+        panel_->setColors(theme.dialogBg, theme.border, 1);
+    if (title_)
+        title_->setTextColor(theme.dialogTitleText);
+    if (hint_)
+        hint_->setTextColor(theme.mutedText);
+    if (text_)
+    {
+        text_->setBackgroundColor(theme.inputBg);
+        text_->setTextColor(theme.inputText);
+        text_->setBorderColor(theme.inputBorder);
+        text_->setSelectionColor(theme.inputSelection);
+    }
 }
 
 //==============================================================================

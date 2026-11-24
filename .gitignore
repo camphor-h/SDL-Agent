@@ -8,6 +8,9 @@ assets/api.json
 *.download
 *.bak
 
+# local usage/billing exports (account ids, masked keys)
+/*.csv
+
 # Android build outputs
 android/.gradle/
 android/.kotlin/

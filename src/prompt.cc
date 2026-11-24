@@ -23,22 +23,25 @@ namespace sdlagent::prompt
 namespace
 {
 
-std::string nowLocal()
+std::string dateOf(uint64_t ms)
 {
-    std::time_t t = std::time(nullptr);
+    if (ms == 0)
+        return "未知";
+
+    std::time_t t = (std::time_t)(ms / 1000);
     std::tm tm{};
 #ifdef _WIN32
     localtime_s(&tm, &t);
 #else
     localtime_r(&t, &tm);
 #endif
-    char buf[64];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
+    char buf[32];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm);
     return buf;
 }
 
 std::string runtimeBlock(const std::string& os, const std::string& workspace,
-                         const std::string& model)
+                         const std::string& model, uint64_t startedAtMs)
 {
     int cores = SDL_GetNumLogicalCPUCores();
     int ramMb = SDL_GetSystemRAM();
@@ -57,7 +60,9 @@ std::string runtimeBlock(const std::string& os, const std::string& workspace,
         out << "CPU 逻辑核心: " << cores << "\n";
     out << "内存: " << mem << "\n";
     out << "工作区目录: " << (workspace.empty() ? "未知" : workspace) << "\n";
-    out << "当前时间: " << nowLocal() << "\n";
+    //Frozen conversation start date, not the wall clock: a per-turn timestamp
+    //would invalidate the provider's prompt cache on every request.
+    out << "对话开始: " << dateOf(startedAtMs) << "\n";
     out << "当前模型: " << (model.empty() ? "未设置" : model) << "\n";
     return out.str();
 }
@@ -137,7 +142,8 @@ void ensureFiles()
 
 std::string compose(const std::string& sysText, const std::string& toolText,
                     bool toolsEnabled, const std::string& os,
-                    const std::string& workspace, const std::string& model)
+                    const std::string& workspace, const std::string& model,
+                    const std::string& agentsText, uint64_t startedAtMs)
 {
     std::string out = trim(sysText).empty() ? std::string(defaults::kSys) : sysText;
 
@@ -153,8 +159,14 @@ std::string compose(const std::string& sysText, const std::string& toolText,
         out += tr().mobileToolsNote;
     }
 
+    if (!trim(agentsText).empty())
+    {
+        out += "\n\n";
+        out += agentsText;
+    }
+
     out += "\n\n";
-    out += runtimeBlock(os, workspace, model);
+    out += runtimeBlock(os, workspace, model, startedAtMs);
     return out;
 }
 

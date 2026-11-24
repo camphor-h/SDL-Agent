@@ -381,13 +381,15 @@ int onEnterBlock(MD_BLOCKTYPE type, void* detail, void* userdata)
 
         case MD_BLOCK_HR:
         {
-            sg::RichTextBlock b = makeBlock(sg::RichBlockType::Paragraph);
+            //Use the rich-text separator primitive: a string of box-drawing
+            //characters is wider than a phone screen and forces the view to
+            //scroll sideways.
+            sg::RichTextBlock b = makeBlock(sg::RichBlockType::Separator);
             b.marginTop = 6;
             b.marginBottom = 10;
-            sg::RichTextRun run;
-            run.text = "────────────────────────────────";
-            run.style.color = st.dimColor;
-            b.runs.push_back(std::move(run));
+            b.separatorMarginTop = 6;
+            b.separatorMarginBottom = 6;
+            b.separatorThickness = 1;
             st.blocks.push_back(std::move(b));
             break;
         }

@@ -30,6 +30,7 @@ class ArrowButton;
 class SettingsDialog;
 class InputDialog;
 class ConfirmDialog;
+class AgentsDialog;
 }
 
 namespace sdlagent
@@ -67,7 +68,7 @@ private:
     void handleFilePickResult();
     void handleImeInset();
     void applyImeInset(int px);
-    static bool SDLCALL imeResizeWatch(void* userdata, SDL_Event* event);
+
 
     //Clipboard and drag-and-drop handling.
     static bool SDLCALL eventFilter(void* userdata, SDL_Event* event);
@@ -75,6 +76,7 @@ private:
     bool pasteFromClipboard();
     void handleDroppedFile(const char* path);
     void updateWebSearchAvailability();
+    void prepareSessionPromptState(Session& session);
     bool canAttachFiles() const;
     void attachFiles(const std::vector<std::string>& paths);
     void handleAgentEvent(const AgentEvent& ev, bool& refresh, bool& force);
@@ -101,7 +103,7 @@ private:
     void requestDeleteSession(const std::string& id);
     void deleteSession(const std::string& id);
 
-    AgentRunConfig makeRunConfig(const std::string& sessionId) const;
+    AgentRunConfig makeRunConfig(const std::string& sessionId);
     std::string    effectiveWorkspace() const;
 
     sdlgui::Application gui_;
@@ -118,7 +120,6 @@ private:
     uint32_t imeEventType_ = 0;
     uint32_t filePickEventType_ = 0;
     int      imeInsetPx_ = 0;
-    int      imeBaseWindowH_ = 0;
     int settingsLineHeight_ = 0;
     SDL_TimerID logTimer_ = 0;
 
@@ -140,6 +141,7 @@ private:
     std::unique_ptr<ui::SettingsDialog> settingsDialog_;
     std::unique_ptr<ui::InputDialog>    inputDialog_;
     std::unique_ptr<ui::ConfirmDialog>  confirmDialog_;
+    std::unique_ptr<ui::AgentsDialog>   agentsDialog_;
 
     std::string currentId_;
     std::string runningId_;

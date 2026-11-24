@@ -21,6 +21,7 @@ std::filesystem::path gConfig;
 std::filesystem::path gSysPrompt;
 std::filesystem::path gToolPrompt;
 std::filesystem::path gTitlePrompt;
+std::filesystem::path gGlobalAgents;
 std::filesystem::path gCatalog;
 std::filesystem::path gAttachments;
 std::filesystem::path gGateways;
@@ -110,6 +111,7 @@ void setDataDir(const std::filesystem::path& dir)
     gSysPrompt = gData / "sys_prompt.md";
     gToolPrompt = gData / "tool_prompt.md";
     gTitlePrompt = gData / "title_prompt.md";
+    gGlobalAgents = gData / "AGENTS.md";
     gCatalog = gData / "api.json";
     gAttachments = gData / "attachments.json";
     gGateways = gData / "gateways.json";
@@ -133,6 +135,12 @@ const std::filesystem::path& titlePromptFile()
 {
     ensureInit();
     return gTitlePrompt;
+}
+
+const std::filesystem::path& globalAgentsFile()
+{
+    ensureInit();
+    return gGlobalAgents;
 }
 
 const std::filesystem::path& apiCatalogFile()

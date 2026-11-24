@@ -188,6 +188,15 @@ const Strings kZh = {
     /*pasteTruncated*/ "粘贴内容过长，已截断。",
     /*sources*/ "来源",
     /*webSearchNote*/ "已启用联网搜索。回答需要最新信息时请直接搜索，并在回答中列出来源；不要声称自己没有联网能力。",
+    /*agentsUpdated*/ "AGENTS.md 已更新，新内容如下：",
+    /*agentsRemoved*/ "AGENTS.md 已移除，之前的项目规则不再适用。",
+    /*webSearchOn*/ "联网搜索：已开启",
+    /*webSearchOff*/ "联网搜索：已关闭，不要发起网络搜索。",
+    /*toolModeLabel*/ "工具模式",
+    /*agentsEditorTitle*/ "AGENTS.md",
+    /*agentsEditorHint*/ "编辑全局 AGENTS.md。保存后，下一次发送会把新内容作为更新通知追加给模型。",
+    /*editAgents*/ "编辑 AGENTS.md",
+    /*agentsSaveFailed*/ "无法写入 AGENTS.md",
 };
 
 const Strings kEn = {
@@ -371,6 +380,15 @@ const Strings kEn = {
     /*pasteTruncated*/ "Pasted text was truncated.",
     /*sources*/ "Sources",
     /*webSearchNote*/ "Web search is enabled. When the answer needs current information, search and list your sources; do not claim that you cannot access the internet.",
+    /*agentsUpdated*/ "AGENTS.md was updated. New content:",
+    /*agentsRemoved*/ "AGENTS.md was removed; the previous project rules no longer apply.",
+    /*webSearchOn*/ "Web search: on",
+    /*webSearchOff*/ "Web search: off; do not search the web.",
+    /*toolModeLabel*/ "Tool mode",
+    /*agentsEditorTitle*/ "AGENTS.md",
+    /*agentsEditorHint*/ "Edit the global AGENTS.md. After saving, the next send appends the new content as an update notice for the model.",
+    /*editAgents*/ "Edit AGENTS.md",
+    /*agentsSaveFailed*/ "Cannot write AGENTS.md",
 };
 
 Lang gLang = Lang::Zh;

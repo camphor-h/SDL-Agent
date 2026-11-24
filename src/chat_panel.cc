@@ -629,7 +629,9 @@ void ChatPanel::updateHint()
         }
     }
 
-    std::string text = modelName_;
+    //Status first: on a narrow phone the label is clipped on the right, and
+    //the long model id would otherwise hide "就绪" / "思考中…".
+    std::string text = status_;
     auto append = [&text](const std::string& part)
     {
         if (part.empty())
@@ -638,7 +640,7 @@ void ChatPanel::updateHint()
             text += " · ";
         text += part;
     };
-    append(status_);
+    append(modelName_);
     hint_->setText(text);
 
     if (!usageLabel_)
@@ -804,6 +806,10 @@ void ChatPanel::refresh(bool forceBottom)
         const auto& msgs = session_->messages;
         for (std::size_t i = 0; i < msgs.size(); ++i)
         {
+            //Hidden state/instruction notices are model-visible only.
+            if (msgs[i].hidden)
+                continue;
+
             Message& m = session_->messages[i];
             if (!m.reasoningExplicit)
                 m.reasoningExpanded = showReasoning_;

@@ -207,6 +207,15 @@ struct Strings
     const char* pasteTruncated;
     const char* sources;
     const char* webSearchNote;
+    const char* agentsUpdated;
+    const char* agentsRemoved;
+    const char* webSearchOn;
+    const char* webSearchOff;
+    const char* toolModeLabel;
+    const char* agentsEditorTitle;
+    const char* agentsEditorHint;
+    const char* editAgents;
+    const char* agentsSaveFailed;
 };
 
 const Strings& tr();

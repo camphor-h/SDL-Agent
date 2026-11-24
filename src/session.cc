@@ -48,6 +48,16 @@ Json toJson(const Session& s)
         .set("updatedAt", (long long)s.updatedAt);
     if (!s.model.empty())
         j.set("model", s.model);
+    if (!s.workspace.empty())
+        j.set("workspace", s.workspace);
+    if (!s.agentsText.empty())
+        j.set("agentsText", s.agentsText);
+    if (!s.agentsHash.empty())
+        j.set("agentsHash", s.agentsHash);
+    if (s.webSearchState >= 0)
+        j.set("webSearchState", s.webSearchState);
+    if (s.toolModeState >= 0)
+        j.set("toolModeState", s.toolModeState);
 
     Json msgs = Json::array();
     for (const Message& m : s.messages)
@@ -75,6 +85,8 @@ Json toJson(const Session& s)
             jm.set("toolName", m.toolName);
         if (m.error)
             jm.set("error", true);
+        if (m.hidden)
+            jm.set("hidden", true);
 
         if (!m.attachments.empty())
         {
@@ -112,6 +124,11 @@ Session sessionFromJson(const Json& j)
     s.createdAt = (uint64_t)j["createdAt"].integer(0);
     s.updatedAt = (uint64_t)j["updatedAt"].integer(0);
     s.model = j["model"].str();
+    s.workspace = j["workspace"].str();
+    s.agentsText = j["agentsText"].str();
+    s.agentsHash = j["agentsHash"].str();
+    s.webSearchState = (int)j["webSearchState"].integer(-1);
+    s.toolModeState = (int)j["toolModeState"].integer(-1);
 
     Json msgs = j["messages"];
     if (msgs.isArray())
@@ -135,6 +152,7 @@ Session sessionFromJson(const Json& j)
             m.toolName = jm["toolName"].str();
             m.timestamp = (uint64_t)jm["timestamp"].integer(0);
             m.error = jm["error"].boolean(false);
+            m.hidden = jm["hidden"].boolean(false);
 
             Json atts = jm["attachments"];
             if (atts.isArray())

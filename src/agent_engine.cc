@@ -532,9 +532,9 @@ void AgentEngine::run(std::vector<Message> history, AgentRunConfig cfg)
         for (std::size_t hi = 0; hi < history.size(); ++hi)
         {
             const Message& m = history[hi];
-            if (m.role == Role::System)
-                continue;
-
+            //Hidden state/instruction notices are system messages; replay
+            //them in place so the model sees tool/search changes and
+            //AGENTS.md updates without rewriting the prompt prefix.
             if (m.role == Role::Tool)
             {
                 std::string id = m.toolCallId.empty() ? "call_0" : m.toolCallId;
